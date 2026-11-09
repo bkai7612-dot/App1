@@ -19,8 +19,8 @@ export function CookieNotice() {
   };
   return (
     <div role="region" aria-label="Cookie notice" className="fixed inset-x-3 bottom-3 z-[70] mx-auto max-w-xl">
-      <div className="glass flex flex-col gap-3 p-4 text-sm sm:flex-row sm:items-center">
-        <p className="text-text-muted">We only use essential cookies to keep you signed in and secure. No advertising or tracking cookies. <Link href="/cookies" className="text-violet-lavender underline">Cookie details</Link></p>
+      <div className="glass flex items-center gap-3 p-3 text-xs sm:p-4 sm:text-sm">
+        <p className="text-text-muted">Essential cookies only, no tracking. <Link href="/cookies" className="text-violet-lavender underline">Cookie details</Link></p>
         <button onClick={() => set("essential")} className="btn-primary shrink-0">OK</button>
       </div>
     </div>

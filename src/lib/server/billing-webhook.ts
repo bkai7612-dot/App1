@@ -28,6 +28,8 @@ async function upsertSubscription(tx: Tx, sub: Sub, eventCreated: number) {
   const at = new Date(eventCreated * 1000);
   const prev = await tx.one<{ status: string; last_event_at: Date }>(`SELECT status, last_event_at FROM subscriptions WHERE stripe_subscription_id = $1 FOR UPDATE`, [sub.id]);
   if (prev && prev.last_event_at > at) return; // out-of-order event: ignore older state
+  // Same-second events: Stripe timestamps have 1s resolution. A terminal state is never overwritten by a same-second non-terminal one.
+  if (prev && prev.last_event_at.getTime() === at.getTime() && ["canceled", "incomplete_expired"].includes(prev.status) && !["canceled", "incomplete_expired"].includes(sub.status)) return;
   await tx.q(
     `INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, price_id, current_period_end, cancel_at_period_end, canceled_at, last_event_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

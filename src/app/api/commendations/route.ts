@@ -34,11 +34,7 @@ export const POST = route({ auth: "mfa", body: Body, rate: { name: "commend-day"
     await audit(tx, auth!.user.id, "commendation.submitted", { type: "commendation", id: row!.id }, { category: body.category, with_comment: !!body.comment }, meta.ipHash);
     return { ok: true, id: row!.id, status: row!.status, owner: p.owner_user_id, publicId: p.public_id };
   }).then(async (r) => {
-    // Anti-sockpuppet: commendations from accounts younger than 72h are held for moderation.
-    if (r.status === "approved" && Date.now() - auth!.user.createdAt.getTime() < 72 * 3600_000) {
-      await withDb(SYSTEM, (tx) => tx.q(`UPDATE commendations SET status = 'pending' WHERE id = $1`, [r.id]));
-      r.status = "pending";
-    }
+    // Anti-sockpuppet: commendations from accounts younger than 72h are held for moderation (enforced atomically in the DB trigger).
     if (r.status === "approved" && r.owner) {
       await withDb(SYSTEM, (tx) => notify(tx, r.owner!, "commendation_received", "You received a commendation", undefined, `/players/${r.publicId}?tab=positive`));
     }

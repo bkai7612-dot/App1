@@ -2,7 +2,7 @@ import "server-only";
 import { withDb, GUEST, SYSTEM, type DbContext, type Tx } from "@/lib/db";
 
 export function normalizeName(name: string): string {
-  return name.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
+  return name.normalize("NFKC").replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069\u200e\u200f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 export interface SearchParams {

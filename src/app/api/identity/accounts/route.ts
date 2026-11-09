@@ -9,7 +9,7 @@ import { rateLimit } from "@/lib/server/ratelimit";
 const Body = z.object({
   playerProfileId: z.string().uuid(),
   platformSlug: z.string().max(40),
-  username: z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f<>]+$/),
+  username: z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]+$/),
 }).strict();
 
 /** Add an UNVERIFIED gaming account link to a profile you own. Verification is a separate step. */

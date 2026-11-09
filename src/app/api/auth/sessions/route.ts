@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { route } from "@/lib/server/api";
-import { withDb } from "@/lib/db";
+import { withDb, SYSTEM } from "@/lib/db";
 import { revokeAllSessions } from "@/lib/auth/session";
 import { securityEvent } from "@/lib/server/audit";
 import { deviceFamily } from "@/lib/server/request";
@@ -19,7 +19,7 @@ export const GET = route({ auth: "auth" }, async ({ auth }) => {
 const Body = z.object({ id: z.string().uuid().optional(), allOthers: z.boolean().optional() });
 
 export const POST = route({ auth: "auth", body: Body }, async ({ auth, body, meta }) => {
-  await withDb(auth!.db, async (tx) => {
+  await withDb(SYSTEM, async (tx) => {
     if (body.allOthers) {
       await revokeAllSessions(tx, auth!.user.id, "user_revoked_others", auth!.session.id);
     } else if (body.id) {

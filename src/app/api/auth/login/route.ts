@@ -25,7 +25,12 @@ export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip"
     await dummyVerify(body.password);
     throw new ApiError(401, "INVALID_CREDENTIALS", GENERIC);
   }
-  if (user.locked_until && user.locked_until.getTime() > Date.now()) {
+  // Anti-DoS: an attacker can lock an account, but the owner can still sign in from a network they've
+  // successfully used in the last 90 days (IP stored only as a keyed hash). Unknown networks stay locked.
+  const knownNetwork = !!(await withDb(SYSTEM, (tx) => tx.one(
+    `SELECT 1 FROM security_events WHERE user_id = $1 AND event_type = 'login_success' AND ip_hash = $2 AND created_at > now() - interval '90 days' LIMIT 1`,
+    [user.id, meta.ipHash])));
+  if (user.locked_until && user.locked_until.getTime() > Date.now() && !knownNetwork) {
     await dummyVerify(body.password);
     await withDb(SYSTEM, (tx) => securityEvent(tx, user.id, "login_while_locked", meta));
     throw new ApiError(401, "INVALID_CREDENTIALS", GENERIC);
@@ -34,8 +39,8 @@ export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip"
   if (!ok) {
     await withDb(SYSTEM, async (tx) => {
       const n = user.failed_login_count + 1;
-      // Escalating lockout: from the 5th consecutive failure, 15 min doubling up to 24h.
-      const lockMinutes = n >= 5 ? Math.min(15 * 2 ** (n - 5), 1440) : 0;
+      // Escalating lockout: from the 5th consecutive failure, 15 min doubling up to 1h (per-IP/email rate limits also apply).
+      const lockMinutes = n >= 5 ? Math.min(15 * 2 ** (n - 5), 60) : 0;
       await tx.q(
         `UPDATE users SET failed_login_count = $2, locked_until = CASE WHEN $3::int > 0 THEN now() + ($3 || ' minutes')::interval ELSE locked_until END WHERE id = $1`,
         [user.id, n, lockMinutes]);

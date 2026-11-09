@@ -24,12 +24,35 @@ const Fields = z.object({
 
 const MAX_BODY = 16 * 1024 * 1024;
 
+/** Reads the request body with a hard byte cap (chunked uploads without Content-Length cannot bypass it). */
+async function readLimitedForm(req: NextRequest, max: number): Promise<FormData> {
+  const reader = req.body?.getReader();
+  if (!reader) throw new ApiError(400, "BAD_REQUEST", "Empty request.");
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) { await reader.cancel(); throw new ApiError(413, "TOO_LARGE", "Upload too large."); }
+    chunks.push(value);
+  }
+  const body = Buffer.concat(chunks);
+  try {
+    return await new Response(body, { headers: { "content-type": req.headers.get("content-type") ?? "" } }).formData();
+  } catch { throw new ApiError(400, "BAD_REQUEST", "Invalid form data."); }
+}
+
 /** Submit a negative report. Always private and 'submitted' until a moderator reviews it. */
 export async function POST(req: NextRequest) {
   try {
     if (req.headers.get("x-ss-csrf") !== "1") throw new ApiError(403, "CSRF", "Request blocked.");
     const origin = req.headers.get("origin");
-    if (origin && new URL(origin).host !== (req.headers.get("x-forwarded-host") ?? req.headers.get("host"))) throw new ApiError(403, "CSRF", "Request blocked.");
+    if (origin) {
+      let host = "";
+      try { host = new URL(origin).host; } catch { host = ""; }
+      if (host !== (req.headers.get("x-forwarded-host") ?? req.headers.get("host"))) throw new ApiError(403, "CSRF", "Request blocked.");
+    }
     if (!featureEnabled("report_submission")) throw new ApiError(503, "LAUNCH_GATE", "Report submission is not open yet.");
     const auth = await getAuth();
     await requireAuthLevel(auth, "mfa");
@@ -41,7 +64,7 @@ export async function POST(req: NextRequest) {
     await rateLimit(`report-day:${me.user.id}`, 5, 86400);
     await rateLimit(`report-hour:${me.user.id}`, 2, 3600);
 
-    const form = await req.formData();
+    const form = await readLimitedForm(req, MAX_BODY);
     const parsed = Fields.safeParse({
       playerProfileId: form.get("playerProfileId"), category: form.get("category"), description: form.get("description"),
       incidentDate: form.get("incidentDate"), accurateConfirm: form.get("accurateConfirm"),

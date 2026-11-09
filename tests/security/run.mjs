@@ -66,11 +66,14 @@ async function makeUser(name, { mfa = true, verify = true } = {}) {
   const r = await c.post("/api/auth/register", { email, password, displayName: `${name}${RUN}`, acceptTerms: true, confirmAge: true });
   if (r.status !== 200) throw new Error(`register ${name} failed ${r.status} ${r.text}`);
   const u = { c, email, password, name: `${name}${RUN}` };
+  if (c.jar.size) throw new Error("registration must not issue a session (enumeration fix)");
   if (verify) {
     const token = lastEmailLink(email, /verify-email\?token=([^\s]+)/);
     const v = await c.post("/api/auth/verify-email", { token });
     if (v.status !== 200) throw new Error("verify failed");
   }
+  const li = await c.post("/api/auth/login", { email, password });
+  if (li.status !== 200) throw new Error(`login ${name} failed ${li.text}`);
   if (mfa) {
     const s = await c.get("/api/auth/mfa/totp");
     u.secret = s.json.secret;
@@ -94,6 +97,7 @@ async function pngFile(name = "shot.png") {
 const shadow = (await db.query(`SELECT p.id, p.public_id FROM player_profiles p JOIN platforms pl ON pl.id = p.platform_id WHERE p.display_name = 'Shadow' AND pl.slug = 'ubisoft-connect' AND p.is_demo LIMIT 1`)).rows[0];
 if (!shadow) { console.error("Seed demo data first (npm run db:seed-demo)."); process.exit(1); }
 
+let ownerReport, D;
 // =====================================================================
 section("Transport, headers and CSRF");
 {
@@ -117,7 +121,8 @@ const B = await makeUser("bob");
 const C = await makeUser("carol");
 {
   const dup = await client().post("/api/auth/register", { email: A.email, password: "Another-Long-Password-123", displayName: "dupe", acceptTerms: true, confirmAge: true });
-  check("Duplicate registration gives same response (no enumeration)", dup.status === 200 && dup.json?.signedIn === false);
+  const fresh = await client().post("/api/auth/register", { email: `fresh-${RUN}@test.invalid`, password: "Another-Long-Password-123", displayName: "fresh", acceptTerms: true, confirmAge: true });
+  check("Duplicate registration gives identical response to new registration (QA-04)", dup.status === 200 && dup.text === fresh.text && !dup.headers.get("set-cookie") && !fresh.headers.get("set-cookie"));
   const weak = await client().post("/api/auth/register", { email: `weak-${RUN}@test.invalid`, password: "short", displayName: "weak", acceptTerms: true, confirmAge: true });
   check("Weak password rejected", weak.status === 400);
   const g = client();
@@ -207,7 +212,7 @@ let reportA, evidenceId;
   check("Script disguised as PNG rejected", fake.status === 400);
   const svg = await mk(new File([Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')], "x.svg", { type: "image/svg+xml" }));
   check("SVG upload rejected", svg.status === 400);
-  const D = await makeUser("dave");
+  D = await makeUser("dave");
   const mkD = async (file) => { const f = new FormData(); f.set("playerProfileId", shadow.id); f.set("category", "griefing"); f.set("description", "Destroyed every reinforcement on our side during the setup phase."); f.set("incidentDate", "2026-10-01"); f.set("accurateConfirm", "true"); f.append("evidence", file); return D.c.post("/api/reports", f); };
   const poly = await pngFile(); const polyBuf = Buffer.concat([Buffer.from(await poly.arrayBuffer()), Buffer.from("<script>alert(1)</script>")]);
   const ok = await mkD(new File([polyBuf], "../../etc/passwd.png", { type: "image/png" }));
@@ -246,7 +251,8 @@ section("Premium entitlement enforced server-side");
   check("Free user blocked from history API", (await B.c.get(`/api/players/${shadow.public_id}/feedback?type=history`)).status === 402);
   const page = await B.c.get(`/players/${shadow.public_id}?tab=positive`);
   check("Free user profile page does not contain comment text", !page.text.includes("Called every rotation clearly"));
-  check("Counts remain public", (await client().get(`/api/players/${shadow.public_id}/feedback?type=stats`)).json?.stats?.positive_total === 10);
+  const expectPos = Number((await db.query(`SELECT positive_total FROM player_reputation_stats WHERE player_profile_id = $1`, [shadow.id])).rows[0].positive_total);
+  check("Counts remain public", (await client().get(`/api/players/${shadow.public_id}/feedback?type=stats`)).json?.stats?.positive_total === expectPos);
   execFileSync("node", ["scripts/dev-grant-plus.mjs", B.email, "grant"]);
   const plus = await B.c.get(path);
   check("Plus user can read approved comments", plus.status === 200 && plus.json.commendations.length >= 10);
@@ -310,7 +316,6 @@ await db.query(`DELETE FROM rate_limits WHERE bucket LIKE 'report-%'`); // test 
 const M = await makeUser("mod");
 execFileSync("node", ["scripts/bootstrap-admin.mjs", M.email, "moderator"]);
 await relogin(M);
-let ownerReport;
 {
   const q = await M.c.get("/admin/reports");
   check("Moderator with MFA session can open dashboard", q.status === 200);
@@ -451,6 +456,55 @@ section("Rate limiting");
     const r = await C.c.post("/api/reports", f); if (r.status === 429) { reportLimited = true; break; }
   }
   check("Report submission rate-limited / deduplicated", reportLimited || true);
+}
+
+section("QA round 1 regressions");
+{
+  const r = await B.c.get("/mfa?next=%2F%09%2Fevil.example");
+  check("QA-01: tab-character open redirect blocked", !/evil/.test(r.headers.get("location") ?? ""));
+  const r2 = await B.c.get("/mfa?next=%0B");
+  check("QA-01b: control char in next= no longer 500s", r2.status < 500);
+  const app = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await app.connect();
+  const as = async (uid, role, sql, params) => {
+    await app.query("BEGIN");
+    await app.query(`SELECT set_config('search_path','ss, public',true), set_config('app.user_id',$1,true), set_config('app.role',$2,true)`, [uid, role]);
+    try { const x = await app.query(sql, params); return { rowCount: x.rowCount }; } catch (e) { return { error: e.code }; } finally { await app.query("ROLLBACK"); }
+  };
+  const sess = await as(B.id, "user", `UPDATE sessions SET mfa_method = 'webauthn', expires_at = now() + interval '10 years', revoked_at = NULL WHERE user_id = $1`, [B.id]);
+  check("QA-05: users cannot rewrite their own session rows", sess.error === "42501" || sess.rowCount === 0);
+  const respId = (await db.query(`SELECT id FROM report_responses WHERE report_id = $1 LIMIT 1`, [ownerReport])).rows[0]?.id;
+  const selfPub = await as(C.id, "moderator", `UPDATE report_responses SET status = 'published' WHERE id = $1`, [respId]);
+  check("QA-02: staff cannot publish their own response (DB trigger)", selfPub.error === "42501");
+  const sa = (await db.query(`SELECT id FROM users WHERE role IN ('admin','super_admin') LIMIT 1`)).rows[0];
+  if (sa) {
+    const sus = await as(M.id, "admin", `UPDATE users SET suspended_at = now() WHERE id = $1 AND role = 'super_admin'`, [sa.id]);
+    const susAdmin = await as(M.id, "admin", `UPDATE users SET suspended_at = now() WHERE id = $1`, [sa.id]);
+    check("QA-03: admins cannot restrict admin/super_admin accounts", (sus.error === "42501" || sus.rowCount === 0) && susAdmin.error === "42501");
+  }
+  const ren = await as(M.id, "senior_moderator", `UPDATE users SET display_name = 'Renamed' WHERE id = $1`, [B.id]);
+  check("Senior moderators cannot rename other users", ren.error === "42501");
+  const fakeVer = await as(B.id, "user", `INSERT INTO account_verifications (user_id, player_profile_id, kind, method, verified_platform_user_id) VALUES ($1, $2, 'profile_claim', 'steam_openid', '76561190000000099')`, [B.id, shadow.id]);
+  check("Users cannot insert pre-proven verification rows", fakeVer.error === "42501");
+  await app.end();
+  // QA-07: chunked oversize upload without Content-Length
+  const big = new ReadableStream({ start(ctrl) { const chunk = new Uint8Array(1024 * 1024); for (let i = 0; i < 20; i++) ctrl.enqueue(chunk); ctrl.close(); } });
+  const cookie = [...D.c.jar].map(([k, v]) => `${k}=${v}`).join("; ");
+  await db.query(`DELETE FROM rate_limits WHERE bucket LIKE 'report-%'`);
+  const up = await fetch(BASE + "/api/reports", { method: "POST", duplex: "half", body: big, headers: { "x-ss-csrf": "1", cookie, "x-forwarded-for": D.c.ip, "content-type": "multipart/form-data; boundary=x" } });
+  check("QA-07: chunked upload over 16MB rejected (413)", up.status === 413);
+  const nul = await client().get("/api/players/search?q=%00");
+  check("NUL byte in search does not 500", nul.status === 200);
+  const nullOrigin = await B.c.post("/api/reports", new FormData(), { headers: { origin: "null" } });
+  check("Origin: null on report upload returns 403 not 500", nullOrigin.status === 403);
+  // QA-08: lockout cannot keep the owner out from a known network
+  const K = await makeUser("knownnet", { mfa: false });
+  const attacker = client();
+  for (let i = 0; i < 6; i++) await attacker.post("/api/auth/login", { email: K.email, password: "wrong-wrong-wrong" });
+  const stranger = await client().post("/api/auth/login", { email: K.email, password: K.password });
+  const owner = await K.c.post("/api/auth/login", { email: K.email, password: K.password });
+  check("QA-08: owner on a known network can still sign in during lockout", owner.status === 200);
+  check("QA-08: lock still applies to unknown networks", stranger.status === 401);
 }
 
 section("Session management");

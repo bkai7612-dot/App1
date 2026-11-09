@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, ClientApiError } from "@/lib/client";
 
@@ -9,15 +8,14 @@ export function RegisterForm() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-  const router = useRouter();
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setErr(null);
     try {
-      const r = await api<{ signedIn: boolean }>("/api/auth/register", { body: f });
-      if (r.signedIn) { router.push("/account/security?welcome=1"); router.refresh(); } else setSent(true);
+      await api("/api/auth/register", { body: f });
+      setSent(true);
     } catch (e) { setErr(e instanceof ClientApiError ? e.message : "Could not register."); } finally { setBusy(false); }
   };
-  if (sent) return <p className="text-sm text-text-muted">Check your email to continue. If you already have an account, we&apos;ve sent you a sign-in reminder instead.</p>;
+  if (sent) return <div className="space-y-4 text-sm text-text-muted"><p>Check your email for a verification link, then log in and set up two-factor authentication. If you already have an account, we&apos;ve emailed you a sign-in reminder instead.</p><Link href="/login?next=/account/security%3Fwelcome%3D1" className="btn-primary w-full">Go to log in</Link></div>;
   return (
     <form onSubmit={submit} className="space-y-4">
       <label className="block"><span className="label">Display name</span><input required minLength={2} maxLength={40} value={f.displayName} onChange={(e) => setF({ ...f, displayName: e.target.value })} className="input" autoComplete="nickname" /></label>

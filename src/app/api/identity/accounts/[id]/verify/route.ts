@@ -22,6 +22,7 @@ export const POST = route({ auth: "mfa", body: Body, rate: { name: "verify-start
        WHERE ga.id = $1 AND p.owner_user_id = $2`, [id.data, auth!.user.id]);
     if (!ga) throw notFound();
     if (ga.verification_status === "verified") throw badRequest("Already verified.");
+    if (ga.verification_status === "unlinked") throw notFound();
     if (ga.slug === "steam" && ga.integration_status === "verified_linking") {
       return { ok: true, redirect: await startSteamVerification(tx, auth!.user.id, ga.player_profile_id, "link_verification", ga.id) };
     }

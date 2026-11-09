@@ -7,7 +7,7 @@ import { audit } from "@/lib/server/audit";
 import { badRequest } from "@/lib/server/errors";
 
 const Body = z.object({
-  displayName: z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f<>]+$/),
+  displayName: z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]+$/),
   gameSlug: z.string().max(40),
   platformSlug: z.string().max(40),
 }).strict();

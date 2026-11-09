@@ -3,7 +3,6 @@ import { route } from "@/lib/server/api";
 import { withDb, SYSTEM } from "@/lib/db";
 import { hashPassword, passwordProblems } from "@/lib/auth/password";
 import { normalizeEmail, sendVerificationEmail } from "@/lib/auth/flows";
-import { createSession } from "@/lib/auth/session";
 import { securityEvent, audit } from "@/lib/server/audit";
 import { sendEmail, emailTemplates } from "@/lib/server/email";
 import { env } from "@/lib/env";
@@ -43,8 +42,9 @@ export const POST = route({ auth: "public", body: Body, rate: { name: "register"
     await sendVerificationEmail(tx, user!.id, body.email.trim());
     await securityEvent(tx, user!.id, "account_created", meta);
     await audit(tx, user!.id, "account.created", { type: "user", id: user!.id }, {}, meta.ipHash);
-    await createSession(tx, user!, meta);
     return { created: true as const };
   });
-  return { ok: true, message: "Check your email to verify your address.", signedIn: result.created };
+  void result;
+  // Identical response for new and existing emails (no session issued): prevents account enumeration.
+  return { ok: true, message: "Check your email to verify your address, then log in." };
 });

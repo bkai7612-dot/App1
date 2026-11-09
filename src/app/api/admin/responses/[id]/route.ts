@@ -3,7 +3,7 @@ import { route } from "@/lib/server/api";
 import { withDb } from "@/lib/db";
 import { audit, moderationAction } from "@/lib/server/audit";
 import { notify } from "@/lib/server/notify";
-import { badRequest, notFound } from "@/lib/server/errors";
+import { badRequest, forbidden, notFound } from "@/lib/server/errors";
 
 const Body = z.object({ decision: z.enum(["publish", "reject"]), note: z.string().trim().max(1000).optional() }).strict();
 
@@ -11,8 +11,11 @@ export const POST = route({ permission: "mod.responses.review", body: Body }, as
   const id = z.string().uuid().safeParse(params.id);
   if (!id.success) throw notFound();
   return withDb(auth!.db, async (tx) => {
-    const r = await tx.one<{ id: string; status: string; report_id: string; author_user_id: string | null }>(`SELECT id, status, report_id, author_user_id FROM report_responses WHERE id = $1 FOR UPDATE`, [id.data]);
+    const r = await tx.one<{ id: string; status: string; report_id: string; author_user_id: string | null; owner_user_id: string | null; reporter_user_id: string | null }>(
+      `SELECT x.id, x.status, x.report_id, x.author_user_id, p.owner_user_id, rp.reporter_user_id FROM report_responses x
+       JOIN reports rp ON rp.id = x.report_id JOIN player_profiles p ON p.id = rp.player_profile_id WHERE x.id = $1 FOR UPDATE OF x`, [id.data]);
     if (!r) throw notFound();
+    if ([r.author_user_id, r.owner_user_id, r.reporter_user_id].includes(auth!.user.id)) throw forbidden("Conflict of interest: another moderator must handle this.");
     if (r.status !== "pending") throw badRequest("Already moderated.");
     const to = body.decision === "publish" ? "published" : "rejected";
     await tx.q(`UPDATE report_responses SET status = $2, moderated_by = $3, moderated_at = now() WHERE id = $1`, [r.id, to, auth!.user.id]);

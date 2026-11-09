@@ -29,6 +29,11 @@ export const POST = route({ permission: "users.view", body: Body }, async ({ aut
   await withDb(auth!.db, async (tx) => {
     const target = await tx.one<{ id: string; role: Role }>(`SELECT id, role FROM users WHERE id = $1`, [id.data]);
     if (!target) throw notFound();
+    if (target.role !== "user" && body.action !== "set_role") {
+      const actor = auth!.user.role;
+      const allowed = actor === "super_admin" || (actor === "admin" && (target.role === "moderator" || target.role === "senior_moderator"));
+      if (!allowed) throw forbidden("You cannot restrict an account with this role.");
+    }
     switch (body.action) {
       case "suspend":
         await tx.q(`UPDATE users SET suspended_at = now(), suspended_until = CASE WHEN $2::int IS NULL THEN NULL ELSE now() + ($2 || ' days')::interval END, suspension_reason = $3 WHERE id = $1`, [target.id, body.days, body.reason]);

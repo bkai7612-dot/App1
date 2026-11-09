@@ -13,7 +13,7 @@ export function VerifyEmail({ token }: { token: string }) {
     catch (e) { setState("err"); setMsg(e instanceof ClientApiError ? e.message : "Verification failed."); }
   };
   if (!token) return <p className="text-sm text-text-muted">This link is missing its token.</p>;
-  if (state === "ok") return <div className="space-y-4"><p>Your email is verified.</p><Link href="/account/security" className="btn-primary w-full">Continue to security setup</Link></div>;
+  if (state === "ok") return <div className="space-y-4"><p>Your email is verified.</p><Link href="/login?next=/account/security%3Fwelcome%3D1" className="btn-primary w-full">Log in and set up two-factor authentication</Link></div>;
   return (
     <div className="space-y-4">
       <button onClick={go} disabled={state === "busy"} className="btn-primary w-full py-3">{state === "busy" && <span className="spinner" />}Confirm my email address</button>

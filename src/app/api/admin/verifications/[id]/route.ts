@@ -29,6 +29,8 @@ export const POST = route({ permission: "mod.verifications.review", body: Body }
                     VALUES ($1, $2, $3, $4, lower($4), $5, 'manual_review', $6, now())`,
           [v.player_profile_id, p.platform_id, status === "verified" ? (v.verified_platform_user_id ?? p.platform_user_id) : null, p.display_name, status, v.user_id]);
       } else if (v.gaming_account_id) {
+        const ga = await tx.one<{ verification_status: string }>(`SELECT verification_status FROM gaming_accounts WHERE id = $1`, [v.gaming_account_id]);
+        if (!ga || ga.verification_status === "unlinked") throw badRequest("That account has been unlinked by its owner.");
         await tx.q(`UPDATE gaming_accounts SET verification_status = $2, verification_method = 'manual_review', last_verified_at = now() WHERE id = $1`, [v.gaming_account_id, status]);
       }
     }
