@@ -9,7 +9,7 @@ const PATTERNS = [
   ["Postgres URL with password", /postgres(ql)?:\/\/[^:\s/]+:[^@\s]{6,}@(?!localhost|127\.0\.0\.1)/],
   ["AWS key", /AKIA[0-9A-Z]{16}/], ["GitHub token", /gh[pousr]_[A-Za-z0-9]{30,}/],
 ];
-const SKIP = new Set(["node_modules", ".git", "storage", ".next/cache"]);
+const SKIP = new Set(["node_modules", ".git", "storage", ".next"]); // .next/static (client bundle) is scanned separately below
 const findings = [];
 function walk(dir, clientOnly = false) {
   if (!fs.existsSync(dir)) return;
