@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuth } from "@/lib/auth/session";
-import { handleError, requireAuthLevel } from "@/lib/server/api";
+import { checkCsrf, handleError, requireAuthLevel } from "@/lib/server/api";
 import { withDb, SYSTEM } from "@/lib/db";
 import { publicId } from "@/lib/crypto";
 import { audit } from "@/lib/server/audit";
@@ -46,13 +46,7 @@ async function readLimitedForm(req: NextRequest, max: number): Promise<FormData>
 /** Submit a negative report. Always private and 'submitted' until a moderator reviews it. */
 export async function POST(req: NextRequest) {
   try {
-    if (req.headers.get("x-ss-csrf") !== "1") throw new ApiError(403, "CSRF", "Request blocked.");
-    const origin = req.headers.get("origin");
-    if (origin) {
-      let host = "";
-      try { host = new URL(origin).host; } catch { host = ""; }
-      if (host !== (req.headers.get("x-forwarded-host") ?? req.headers.get("host"))) throw new ApiError(403, "CSRF", "Request blocked.");
-    }
+    checkCsrf(req);
     if (!featureEnabled("report_submission")) throw new ApiError(503, "LAUNCH_GATE", "Report submission is not open yet.");
     const auth = await getAuth();
     await requireAuthLevel(auth, "mfa");

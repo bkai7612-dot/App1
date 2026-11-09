@@ -35,21 +35,30 @@ export interface RouteCtx<B> {
 
 const MAX_JSON = 64 * 1024;
 
-function checkCsrf(req: NextRequest) {
+/**
+ * CSRF defence for every mutating request:
+ * 1. A custom header (x-ss-csrf) is required, which forces a CORS preflight that we never approve.
+ * 2. If the browser sent Sec-Fetch-Site (a forbidden header pages can't forge), it must be same-origin.
+ *    This also works behind proxies that rewrite the Host header.
+ * 3. Otherwise, any Origin header must match the forwarded host, the Host header or APP_URL.
+ */
+export function checkCsrf(req: NextRequest) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
-  // Custom header forces a CORS preflight for cross-origin requests (which we never allow).
   if (req.headers.get("x-ss-csrf") !== "1") throw new ApiError(403, "CSRF", "Request blocked.");
+  const site = req.headers.get("sec-fetch-site");
   const origin = req.headers.get("origin");
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (site) {
+    if (site !== "same-origin") throw new ApiError(403, "CSRF", "Request blocked.");
+    return;
+  }
   if (origin) {
     let ok = false;
     try {
       const o = new URL(origin);
-      ok = o.host === host || origin === env.appUrl;
+      const hosts = [req.headers.get("x-forwarded-host"), req.headers.get("host")].filter(Boolean);
+      ok = hosts.includes(o.host) || o.origin === new URL(env.appUrl).origin;
     } catch { ok = false; }
     if (!ok) throw new ApiError(403, "CSRF", "Request blocked.");
-  } else if (req.headers.get("sec-fetch-site") === "cross-site") {
-    throw new ApiError(403, "CSRF", "Request blocked.");
   }
 }
 
