@@ -13,7 +13,6 @@ const GENERIC = "Incorrect email or password, or the account is temporarily lock
 
 export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip", limit: 20, windowSec: 900 } }, async ({ body, meta }) => {
   const emailNorm = normalizeEmail(body.email);
-  await rateLimit(`login-email:${emailNorm}`, 10, 900);
 
   const user = await withDb(SYSTEM, (tx) =>
     tx.one<{ id: string; email: string; role: string; password_hash: string; mfa_enabled: boolean; locked_until: Date | null;
@@ -21,15 +20,20 @@ export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip"
       `SELECT id, email, role, password_hash, mfa_enabled, locked_until, failed_login_count, suspended_at, suspended_until, deleted_at, deletion_requested_at
        FROM users WHERE email_normalized = $1`, [emailNorm]));
 
+  // Known-network check FIRST, so neither the lockout nor the per-email limit can be used to keep the owner out.
+  const knownNetwork = user ? !!(await withDb(SYSTEM, (tx) => tx.one(
+    `SELECT 1 FROM security_events WHERE user_id = $1 AND event_type = 'login_success' AND ip_hash = $2 AND created_at > now() - interval '90 days' LIMIT 1`,
+    [user.id, meta.ipHash]))) : false;
+  // Per-account limit for unknown networks (slows distributed guessing); known networks have their own per-IP limit.
+  if (!knownNetwork) await rateLimit(`login-email:${emailNorm}`, 10, 900);
+  else await rateLimit(`login-email-known:${emailNorm}:${meta.ipHash}`, 10, 900);
+
   if (!user || user.deleted_at) {
     await dummyVerify(body.password);
     throw new ApiError(401, "INVALID_CREDENTIALS", GENERIC);
   }
   // Anti-DoS: an attacker can lock an account, but the owner can still sign in from a network they've
   // successfully used in the last 90 days (IP stored only as a keyed hash). Unknown networks stay locked.
-  const knownNetwork = !!(await withDb(SYSTEM, (tx) => tx.one(
-    `SELECT 1 FROM security_events WHERE user_id = $1 AND event_type = 'login_success' AND ip_hash = $2 AND created_at > now() - interval '90 days' LIMIT 1`,
-    [user.id, meta.ipHash])));
   if (user.locked_until && user.locked_until.getTime() > Date.now() && !knownNetwork) {
     await dummyVerify(body.password);
     await withDb(SYSTEM, (tx) => securityEvent(tx, user.id, "login_while_locked", meta));

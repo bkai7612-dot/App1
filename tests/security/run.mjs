@@ -505,6 +505,14 @@ section("QA round 1 regressions");
   const owner = await K.c.post("/api/auth/login", { email: K.email, password: K.password });
   check("QA-08: owner on a known network can still sign in during lockout", owner.status === 200);
   check("QA-08: lock still applies to unknown networks", stranger.status === 401);
+  // Round 2: exhaust the per-email limit from an attacker IP, then the owner must still get in from a known network.
+  const K2 = await makeUser("knownnet2", { mfa: false });
+  const att2 = client();
+  for (let i = 0; i < 12; i++) await att2.post("/api/auth/login", { email: K2.email, password: "wrong-wrong-wrong" });
+  const own2 = await K2.c.post("/api/auth/login", { email: K2.email, password: K2.password });
+  check("QA-08 r2: per-email rate limit cannot lock the owner out of a known network", own2.status === 200);
+  const zw = await B.c.post("/api/players", { displayName: "Sha\u200bdow", gameSlug: "rust", platformSlug: "steam" });
+  check("L9 r2: zero-width characters rejected in display names", zw.status === 400);
 }
 
 section("Session management");

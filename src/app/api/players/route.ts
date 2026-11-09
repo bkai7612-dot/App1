@@ -8,7 +8,7 @@ import { badRequest, conflict } from "@/lib/server/errors";
 import { rateLimit } from "@/lib/server/ratelimit";
 
 const Body = z.object({
-  displayName: z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]+$/, "Invalid characters"),
+  displayName: z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069\u200b-\u200f\u061c\ufeff\u00ad]+$/, "Invalid characters"),
   gameSlug: z.string().max(40),
   platformSlug: z.string().max(40),
   platformUserId: z.string().trim().max(128).regex(/^[A-Za-z0-9#_.:\-]*$/).optional().nullable(),

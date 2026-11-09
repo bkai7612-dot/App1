@@ -5,9 +5,9 @@
 | Layer | How | Result |
 |---|---|---|
 | Unit | `npm test`: TOTP RFC 4226 vectors, replay, open-redirect guard, RBAC matrix | 7/7 pass |
-| Developer integration & security | `npm run test:security`: real HTTP against the running app plus direct SQL attacks as the app role | **139/139 pass** |
+| Developer integration & security | `npm run test:security`: real HTTP against the running app plus direct SQL attacks as the app role | **141/141 pass** |
 | Independent QA, round 1 | Separate tester agent: black-box HTTP, code review, DB-role attacks, Playwright at 390px | 0 Critical, 0 High, **8 Medium**, ~14 Low/Info |
-| Independent QA, round 2 (retest) | Same tester re-verifying the fixes | See the round 2 section |
+| Independent QA, round 2 (retest) | Same tester re-verifying the fixes | All passed except the QA-08 bypass and part of L-7, both fixed and covered by tests (round 3 below) |
 | Build & supply chain | `next build`, `tsc`, `npm audit --omit=dev`, `npm run scan:secrets` | Pass; 0 production advisories |
 | Manual / visual | Playwright walkthrough of every role (docs/prototype/*.png), desktop and mobile | No console errors, no horizontal overflow |
 
@@ -55,6 +55,21 @@
 | L-5 | Low | Users could insert verification rows with a claimed SteamID | RLS insert check | suite (DB) |
 | L-6 | Low | Senior moderators could rename any user | Trigger: only self or admins | suite (DB) |
 | L-7 | Low | Bidi-override characters in display names (spoofing) | Rejected in all name inputs; stripped in search normalisation | |
+
+## Independent QA round 2 (retest) and round 3 fixes
+
+Full tester report: [qa/INDEPENDENT_QA_REPORT.md](qa/INDEPENDENT_QA_REPORT.md).
+
+| Item | Round 2 result | Follow-up |
+|---|---|---|
+| QA-01, QA-02, QA-03, QA-04, QA-05, QA-07 | PASS (16 open-redirect bypass payloads, hierarchy matrix, timing parity, 80 MB chunked upload, etc.) | none |
+| QA-06 mobile menu | Not re-run by the tester | Verified by the developer with Playwright: solid full-screen overlay, closes on Escape, no overflow (docs/prototype/18-mobile-menu.png) |
+| QA-08 lockout DoS | **FAIL (partial):** the per-email login rate limit (10 per 15 minutes) ran before the known-network check, so an attacker could still lock the owner out | Fixed: the known-network check runs first; known networks use a separate per-email+IP-hash bucket. Regression test "QA-08 r2" passes |
+| L-7 invisible characters | Partial: U+200B to U+200F, U+061C and U+FEFF still accepted | Fixed: rejected in names and stripped in search. Regression test "L9 r2" passes |
+| Other low items | PASS | none |
+| Register/login/MFA regression | PASS | none |
+
+Not retested by the tester: the `/search` page rate limit (it returns a 200 page with a "slow down" notice rather than 429; the JSON API returns 429), and architectural risk R-1.
 
 ## Security issue register (open / accepted risks)
 
