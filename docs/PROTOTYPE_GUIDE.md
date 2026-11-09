@@ -1,5 +1,7 @@
 # Prototype walkthrough: what to test and what to look for
 
+**Quickest way: press this link:** https://claude.ai/artifact/TTBK472MPTu4m1Ro7PLK5t. It's a clickable prototype with no sign-in; use the **View as** bar at the top to switch between guest, free member, Plus member, profile owner and moderator. The rest of this guide covers the full working app, which runs on the development server.
+
 This is a working prototype running on a development server with **fictional demonstration data**. Payments run in simulated mode: real Stripe Checkout needs your Stripe keys.
 
 ## Test accounts

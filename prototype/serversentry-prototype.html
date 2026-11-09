@@ -1,0 +1,628 @@
+<title>ServerSentry Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: sticky role bar + app header, single centred column (max 1120px), views swapped in place.
+   Single dark look by design (ServerSentry brand: black, purple, iridescent violet). */
+:root {
+  color-scheme: dark;
+  --bg: #08070D; --bg2: #100D19; --card: #171322; --line: #2A2340;
+  --purple: #8B5CF6; --violet: #A855F7; --lav: #C4B5FD;
+  --text: #F5F3FF; --muted: #A8A2B8;
+  --pos: #34D399; --neg: #F87171; --warn: #FBBF24; --info: #7DD3FC;
+  --iris: linear-gradient(110deg, #8b5cf6 0%, #d946ef 22%, #6366f1 45%, #22d3ee 62%, #f472b6 80%, #8b5cf6 100%);
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--text); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg2); }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--lav); }
+:focus-visible { outline: 2px solid var(--lav); outline-offset: 2px; border-radius: 6px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); letter-spacing: -0.01em; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.tiny { font-size: 12px; }
+
+/* Role bar */
+.rolebar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: #1b1530; border-bottom: 1px solid var(--line); }
+.rolebar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block: 8px; }
+.rolebar b { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--lav); }
+.roles { display: flex; flex-wrap: wrap; gap: 6px; }
+.role { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 4px 11px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.role[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; }
+.rolebar .note { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+/* Header */
+header.app { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 45px); z-index: 20; background: rgba(8,7,13,.92); border-bottom: 1px solid rgba(255,255,255,.06); }
+header.app .wrap { display: flex; align-items: center; gap: 18px; height: 60px; }
+.logo { display: flex; align-items: center; gap: 9px; background: none; border: 0; cursor: pointer; padding: 0; font-family: var(--display); font-weight: 600; font-size: 17px; }
+.iris-text { background: var(--iris); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shift 12s linear infinite; }
+nav.main { display: flex; gap: 2px; }
+nav.main button { background: none; border: 0; color: var(--muted); padding: 8px 11px; border-radius: 8px; cursor: pointer; font-size: 14px; position: relative; }
+nav.main button:hover { color: var(--text); }
+nav.main button[aria-current="page"] { color: #fff; }
+nav.main button[aria-current="page"]::after { content: ""; position: absolute; left: 11px; right: 11px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--iris); background-size: 300% 100%; animation: shift 8s linear infinite; }
+.who { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: linear-gradient(135deg, var(--purple), #d946ef); }
+
+/* Buttons and inputs */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; padding: 10px 16px; font-weight: 600; font-size: 14px; cursor: pointer; border: 1px solid var(--line); background: rgba(255,255,255,.02); color: var(--text); transition: filter .2s, background .2s, border-color .2s; }
+.btn:hover { border-color: rgba(139,92,246,.6); background: rgba(139,92,246,.1); }
+.btn.primary { border: 0; color: #fff; background: linear-gradient(135deg, #8b5cf6, #a855f7 55%, #7c3aed); box-shadow: 0 8px 30px -10px rgba(168,85,247,.7), inset 0 1px 0 rgba(255,255,255,.2); }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.pos { border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.1); color: var(--pos); }
+.btn.neg { border-color: rgba(248,113,113,.4); background: rgba(248,113,113,.1); color: var(--neg); }
+.btn.sm { padding: 6px 11px; font-size: 12.5px; border-radius: 10px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.input { width: 100%; border-radius: 12px; border: 1px solid var(--line); background: rgba(8,7,13,.7); padding: 10px 13px; font-size: 14px; }
+.input:focus { outline: none; border-color: rgba(139,92,246,.8); box-shadow: 0 0 0 3px rgba(139,92,246,.2); }
+label.lbl { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+.field { display: grid; gap: 0; }
+
+/* Surfaces */
+.glass { position: relative; background: linear-gradient(180deg, rgba(23,19,34,.92), rgba(16,13,25,.92)); border-radius: 18px; border: 1px solid rgba(196,181,253,.13); }
+.pad { padding: 22px; }
+.iris { position: relative; border-radius: 18px; }
+.iris::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; background: var(--iris); background-size: 300% 100%; animation: shift 9s linear infinite; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+.glow { box-shadow: 0 18px 60px -20px rgba(168,85,247,.55); }
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.chip.ok { color: var(--pos); border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.08); }
+.chip.warn { color: var(--warn); border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.08); }
+.chip.bad { color: var(--neg); border-color: rgba(248,113,113,.4); background: rgba(248,113,113,.08); }
+.chip.info { color: var(--info); border-color: rgba(125,211,252,.4); background: rgba(125,211,252,.08); }
+.chip.vio { color: var(--lav); border-color: rgba(139,92,246,.5); background: rgba(139,92,246,.12); }
+.notice { border-radius: 12px; padding: 11px 14px; font-size: 13.5px; border: 1px solid rgba(139,92,246,.3); background: rgba(139,92,246,.1); color: var(--lav); }
+.notice.warn { border-color: rgba(251,191,36,.3); background: rgba(251,191,36,.08); color: #fde68a; }
+.notice.ok { border-color: rgba(52,211,153,.3); background: rgba(52,211,153,.08); color: #a7f3d0; }
+.stack { display: grid; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.grid2 { display: grid; gap: 18px; grid-template-columns: 1.4fr 1fr; }
+.grid2 > * { min-width: 0; }
+main { padding-block: 28px 80px; }
+.section-title { font-size: 22px; font-weight: 600; margin-bottom: 14px; }
+
+/* Hero */
+.hero { position: relative; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,.04); }
+.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hero .inner { position: relative; text-align: center; padding-block: 64px 56px; }
+.hero h1 { font-size: clamp(34px, 6vw, 60px); font-weight: 600; line-height: 1.06; }
+.hero .lede { max-width: 640px; margin: 18px auto 0; color: var(--muted); font-size: 17px; }
+.searchbar { display: grid; gap: 8px; grid-template-columns: 1.6fr 1fr 1fr auto; padding: 8px; margin: 34px auto 0; max-width: 880px; text-align: left; }
+.searchbar .input { border-color: transparent; }
+
+/* Lists */
+.result { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 16px 18px; cursor: pointer; text-align: left; width: 100%; color: inherit; transition: transform .15s, box-shadow .2s; }
+.result:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(139,92,246,.35), 0 8px 40px -12px rgba(139,92,246,.45); }
+.result .name { font-family: var(--display); font-size: 18px; font-weight: 600; }
+.counts { display: flex; gap: 8px; margin-left: auto; }
+.count { border-radius: 10px; padding: 6px 11px; font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.count.pos { background: rgba(52,211,153,.1); color: var(--pos); }
+.count.neg { background: rgba(248,113,113,.1); color: var(--neg); }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; margin-top: 26px; }
+.tabs button { background: none; border: 0; padding: 12px 15px; color: var(--muted); cursor: pointer; white-space: nowrap; position: relative; font-size: 14px; }
+.tabs button[aria-selected="true"] { color: #fff; }
+.tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--iris); background-size: 300% 100%; }
+dl.stats { margin: 0; }
+dl.stats > div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+dl.stats dt { font-size: 14px; } dl.stats dt span { display: block; font-size: 12px; color: var(--muted); }
+dl.stats dd { margin: 0; font-family: var(--display); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.big { border-radius: 14px; padding: 14px 16px; }
+.big strong { font-family: var(--display); font-size: 30px; display: block; font-variant-numeric: tabular-nums; }
+.big.pos { border: 1px solid rgba(52,211,153,.25); background: rgba(52,211,153,.06); color: var(--pos); }
+.big.neg { border: 1px solid rgba(248,113,113,.25); background: rgba(248,113,113,.06); color: var(--neg); }
+.big span { font-size: 12px; color: var(--muted); }
+.lock { text-align: center; padding: 40px 22px; }
+.lock .price { font-family: var(--display); font-size: 40px; font-weight: 600; margin-top: 12px; }
+.bars { display: flex; align-items: flex-end; gap: 6px; height: 160px; margin-top: 18px; }
+.bars .m { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.bars .pair { display: flex; align-items: flex-end; gap: 2px; height: 140px; }
+.bars .b { width: 8px; border-radius: 3px 3px 0 0; }
+.subtle { background: rgba(8,7,13,.5); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cat { border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; cursor: pointer; font-size: 13.5px; color: var(--muted); background: transparent; text-align: left; }
+.cat[aria-pressed="true"] { border-color: rgba(52,211,153,.6); background: rgba(52,211,153,.1); color: var(--pos); }
+
+/* Admin layout */
+.admin { display: grid; grid-template-columns: 220px 1fr; gap: 20px; }
+.admin > * { min-width: 0; }
+.side button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--muted); padding: 9px 12px; border-radius: 10px; cursor: pointer; font-size: 14px; }
+.side button[aria-current="page"], .side button:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.kpi p:first-child { font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.kpi p:last-child { font-family: var(--display); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.timeline li { border-left: 2px solid rgba(139,92,246,.4); padding-left: 12px; margin-bottom: 8px; list-style: none; }
+.timeline { padding: 0; margin: 0; }
+
+/* Modal + toast */
+.scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.7); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-left, 0px)); }
+.modal { width: min(520px, 100%); max-height: 86vh; overflow: auto; }
+.modal header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.modal .body { padding: 20px; }
+.x { background: none; border: 0; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px 8px; }
+.toast { position: fixed; z-index: 70; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: #1f1933; border: 1px solid rgba(139,92,246,.5); border-radius: 12px; padding: 11px 16px; font-size: 14px; box-shadow: 0 10px 40px -10px rgba(0,0,0,.8); max-width: calc(100vw - 32px); }
+
+footer { border-top: 1px solid rgba(255,255,255,.06); padding-block: 26px; color: var(--muted); font-size: 12.5px; }
+
+@keyframes shift { to { background-position: 300% 50%; } }
+@media (max-width: 860px) {
+  nav.main { display: none; }
+  .searchbar { grid-template-columns: 1fr; }
+  .grid2, .admin { grid-template-columns: 1fr; }
+  .side { display: flex; overflow-x: auto; gap: 4px; }
+  .side button { white-space: nowrap; width: auto; }
+  .rolebar .note { display: none; }
+  header.app { top: calc(env(safe-area-inset-top, 0px) + 82px); }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="rolebar" role="region" aria-label="Prototype controls">
+  <div class="wrap">
+    <b>View as</b>
+    <div class="roles" id="roles"></div>
+    <span class="note">Interactive prototype · fictional data · changes reset on reload</span>
+  </div>
+</div>
+<header class="app">
+  <div class="wrap">
+    <button class="logo" data-go="home" aria-label="ServerSentry home">
+      <svg width="26" height="26" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset=".35" stop-color="#a855f7"/><stop offset=".65" stop-color="#6366f1"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><path d="M20 2.5 34.5 8v10.6c0 9-6.1 16.1-14.5 18.9C11.6 34.7 5.5 27.6 5.5 18.6V8L20 2.5Z" fill="none" stroke="url(#lg)" stroke-width="2.4" stroke-linejoin="round"/><path d="M11 20.5c3-3.2 6-3.2 9 0s6 3.2 9 0" fill="none" stroke="url(#lg)" stroke-width="2.4" stroke-linecap="round"/><path d="M11 14.5c3-3.2 6-3.2 9 0s6 3.2 9 0" fill="none" stroke="url(#lg)" stroke-width="2" stroke-linecap="round" opacity=".55"/></svg>
+      <span>Server<span class="iris-text">Sentry</span></span>
+    </button>
+    <nav class="main" id="nav" aria-label="Main"></nav>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+<main id="app"></main>
+<footer><div class="wrap">ServerSentry prototype. Published reports are moderated community allegations, not findings of fact. Nobody can pay to remove reports or improve their reputation.</div></footer>
+<div id="layer"></div>
+
+<script>
+// ---------- Data (fictional demonstration data) ----------
+const GAMES = ["Rainbow Six Siege", "League of Legends", "Call of Duty", "Counter-Strike 2", "Valorant", "Minecraft", "Rust", "Other"];
+const PLATFORMS = [
+  ["Ubisoft Connect", "manual"], ["Steam", "verified"], ["Riot Games", "manual"], ["Xbox", "manual"], ["PlayStation Network", "manual"], ["Other", "manual"],
+];
+const COMM_CATS = { excellent_teammate: "Excellent teammate", helpful_player: "Helpful player", great_communication: "Great communication", good_sportsmanship: "Good sportsmanship", friendly_opponent: "Friendly opponent", team_leadership: "Team leadership", fair_play: "Fair play" };
+const REP_CATS = { harassment: "Harassment", abusive_behaviour: "Abusive behaviour", threats_intimidation: "Threats or intimidation", griefing: "Griefing", unsportsmanlike_conduct: "Unsportsmanlike conduct", suspected_cheating: "Suspected cheating", other: "Other inappropriate behaviour" };
+const STATUS = {
+  submitted: ["Submitted", "Awaiting moderation", ""], under_review: ["Under review", "Under review", "info"],
+  published: ["Published", "Allegation", "warn"], disputed: ["Disputed", "Disputed allegation", "warn"],
+  appealed: ["Appealed", "Allegation under appeal", "warn"], resolved: ["Resolved", "Resolved moderation outcome", "vio"],
+  rejected: ["Rejected", "Rejected", ""], removed: ["Removed", "Removed", ""],
+};
+const PUBLIC = ["published", "disputed", "appealed", "resolved"];
+const IDENT = { verified: ["Verified", "ok", "Ownership confirmed through an official sign-in or moderator review."], possible_match: ["Possible match", "warn", "A moderator saw supporting signals, but ownership is not confirmed."], unverified: ["Unverified", "", "Identified manually by username. Not confirmed as belonging to any person."] };
+
+let seq = 100;
+const d = (daysAgo) => { const x = new Date(); x.setDate(x.getDate() - daysAgo); return x; };
+const C = (cat, comment, days, status = "approved") => ({ id: ++seq, cat, comment, date: d(days), status });
+const DB = {
+  profiles: [
+    { id: "SS-7KQ2M9XA", name: "Shadow", game: "Rainbow Six Siege", platform: "Ubisoft Connect", ident: "unverified", owner: true, created: d(200), linked: [["Shadow", "Ubisoft Connect", "unverified"]] },
+    { id: "SS-H3VTN6PE", name: "Shadow", game: "Counter-Strike 2", platform: "Steam", ident: "verified", owner: false, created: d(180), linked: [["Shadow", "Steam", "verified"]] },
+    { id: "SS-R8MDW2KC", name: "Shadow", game: "Rainbow Six Siege", platform: "Xbox", ident: "unverified", owner: false, created: d(90), linked: [] },
+    { id: "SS-N4XP7QJT", name: "NovaStrike", game: "Valorant", platform: "Riot Games", ident: "possible_match", owner: false, created: d(140), linked: [["NovaStrike#EUW", "Riot Games", "possible_match"]] },
+    { id: "SS-A9ZB3LUF", name: "AuroraBuilds", game: "Minecraft", platform: "Xbox", ident: "unverified", owner: false, created: d(60), linked: [] },
+    { id: "SS-K6TYV5HD", name: "Kestrel", game: "League of Legends", platform: "Riot Games", ident: "unverified", owner: false, created: d(30), linked: [] },
+  ],
+  comms: {
+    "SS-7KQ2M9XA": [C("great_communication", "Called every rotation clearly. Great to play with.", 9), C("helpful_player", "Stayed calm when we were down 1-4 and helped us turn it around.", 26), C("good_sportsmanship", "Explained the map callouts to a new player without any attitude.", 43), C("team_leadership", null, 60), C("friendly_opponent", "GG. Super respectful even after a rough loss.", 77), C("fair_play", null, 94), C("excellent_teammate", "Fantastic shot-calling, never flamed anyone.", 111), C("great_communication", null, 128), C("helpful_player", "Helped me learn defender setups.", 145), C("good_sportsmanship", "Always fair, never abused bugs.", 162)],
+    "SS-H3VTN6PE": [C("excellent_teammate", "Clutched twice and stayed humble.", 12), C("fair_play", null, 40), C("great_communication", "Clear economy calls every round.", 70), C("helpful_player", null, 99)],
+    "SS-N4XP7QJT": [C("team_leadership", "Kept comms positive all match.", 5), C("excellent_teammate", null, 21), C("great_communication", "Perfect utility callouts.", 34), C("fair_play", null, 52), C("good_sportsmanship", null, 67), C("friendly_opponent", "Said GG and meant it.", 80), C("helpful_player", null, 101)],
+    "SS-A9ZB3LUF": [C("helpful_player", "Rebuilt our base after a creeper incident.", 8), C("friendly_opponent", null, 30), C("excellent_teammate", null, 61)],
+  },
+  reports: [
+    { id: 1, ref: "R-DEMO81BA", pid: "SS-7KQ2M9XA", cat: "harassment", status: "published", days: 15, summary: "A community member alleges this player sent repeated insulting messages in team chat during a ranked match.", desc: "He kept calling me slurs in team chat for three rounds after I missed a shot.", reporter: "DemoMember1", evidence: 2, flags: [] },
+    { id: 2, ref: "R-DEMO2813", pid: "SS-7KQ2M9XA", cat: "unsportsmanlike_conduct", status: "published", days: 23, summary: "A community member alleges this player deliberately team-killed after losing a round.", desc: "Shot me in the back at round start after we lost the previous round.", reporter: "DemoMember2", evidence: 1, flags: [] },
+    { id: 3, ref: "R-DEMO7F08", pid: "SS-7KQ2M9XA", cat: "griefing", status: "disputed", days: 31, summary: "A community member alleges this player repeatedly destroyed team reinforcements during setup phase.", response: "I was setting up a rotation hole the team agreed on in voice chat. Happy for moderators to review.", desc: "Kept breaking our reinforced walls in prep phase.", reporter: "DemoMember3", evidence: 0, flags: [] },
+    { id: 4, ref: "R-DEMOB0DD", pid: "SS-7KQ2M9XA", cat: "abusive_behaviour", status: "appealed", days: 39, summary: "A community member alleges abusive language in voice chat towards a teammate.", desc: "Screamed abuse at our support player all match.", reporter: "DemoMember4", evidence: 1, flags: [], appeal: "The match in question was a custom game among friends and the language was mutual banter." },
+    { id: 5, ref: "R-DEMO0BE5", pid: "SS-7KQ2M9XA", cat: "suspected_cheating", status: "published", days: 47, summary: "A community member alleges unusually precise tracking through walls. This is an unverified allegation; ServerSentry does not determine whether cheating occurred.", desc: "Tracked me through two walls perfectly, twice.", reporter: "DemoMember5", evidence: 2, flags: [] },
+    { id: 6, ref: "R-DEMO4909", pid: "SS-7KQ2M9XA", cat: "harassment", status: "resolved", days: 55, summary: "A community member alleged repeated hostile messages after a match.", outcome: "After reviewing the submitted screenshots, a moderator found the report consistent with our Community Guidelines on harassment.", desc: "Followed me into a new lobby to keep insulting me.", reporter: "DemoMember6", evidence: 3, flags: [] },
+    { id: 7, ref: "R-DEMOE899", pid: "SS-7KQ2M9XA", cat: "griefing", status: "submitted", days: 3, desc: "Blocked the only exit door with a deployable shield and wouldn't move for the whole round.", reporter: "DemoMember8", evidence: 1, flags: ["report burst 24h"] },
+    { id: 8, ref: "R-DEMOX1Q2", pid: "SS-7KQ2M9XA", cat: "other", status: "rejected", days: 40, desc: "He's just bad at the game.", reporter: "DemoMember7", evidence: 0, flags: [] },
+    { id: 9, ref: "R-DEMOQ7W3", pid: "SS-K6TYV5HD", cat: "threats_intimidation", status: "under_review", days: 1, desc: "Said he would find out where I live after I reported him in-game.", reporter: "DemoMember2", evidence: 1, flags: ["young accounts cluster"] },
+  ],
+  pendingComments: [{ id: ++seq, pid: "SS-N4XP7QJT", cat: "great_communication", comment: "Best shot-caller I've queued with this season.", by: "DemoMember4" }],
+  log: [],
+  myReports: [],
+};
+
+// ---------- State ----------
+const S = { role: "guest", view: "home", search: { q: "", game: "", platform: "" }, pid: null, tab: "overview", adminView: "overview", rid: null, upgraded: false, given: new Set() };
+const ROLES = [["guest", "Guest"], ["free", "Free member"], ["plus", "Plus member"], ["owner", "Profile owner"], ["mod", "Moderator"]];
+const NAMES = { free: "TestPlayer", plus: "TestPlusMember", owner: "TestOwner", mod: "TestModerator" };
+const isPlus = () => S.role === "plus" || (S.upgraded && S.role !== "guest");
+const signedIn = () => S.role !== "guest";
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmt = (x) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const profile = (id) => DB.profiles.find((p) => p.id === id);
+function stats(pid) {
+  const comms = DB.comms[pid] ?? [];
+  const reps = DB.reports.filter((r) => r.pid === pid);
+  const pending = DB.pendingComments.filter((c) => c.pid === pid).length;
+  return {
+    pos: comms.filter((c) => c.status === "approved").length,
+    neg: reps.filter((r) => PUBLIC.includes(r.status)).length,
+    total: reps.length,
+    pending: reps.filter((r) => ["submitted", "under_review"].includes(r.status)).length + pending,
+    disputed: reps.filter((r) => ["disputed", "appealed"].includes(r.status)).length,
+    rejected: reps.filter((r) => ["rejected", "removed"].includes(r.status)).length,
+  };
+}
+const isOwnerOf = (p) => S.role === "owner" && p.owner;
+
+// ---------- Rendering helpers ----------
+const ident = (k) => `<span class="chip ${IDENT[k][1]}" title="${esc(IDENT[k][2])}">${IDENT[k][0]}</span>`;
+const statusChip = (s, internal) => `<span class="chip ${STATUS[s][2]}">${internal ? STATUS[s][0] : STATUS[s][1]}</span>`;
+function toast(msg) {
+  const el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status"); el.textContent = msg;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 3200);
+}
+function go(view, extra = {}) { Object.assign(S, { view }, extra); render(); window.scrollTo({ top: 0 }); }
+function modal(title, html, onMount) {
+  const layer = document.getElementById("layer");
+  layer.innerHTML = `<div class="scrim" data-close><div class="modal glass" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header><h3>${esc(title)}</h3><button class="x" data-close aria-label="Close">×</button></header><div class="body">${html}</div></div></div>`;
+  layer.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", (e) => { if (e.target === el) closeModal(); }));
+  layer.querySelector(".modal input, .modal textarea, .modal button:not(.x)")?.focus();
+  onMount?.(layer.querySelector(".modal"));
+}
+function closeModal() { document.getElementById("layer").innerHTML = ""; }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+// ---------- Chrome ----------
+function renderChrome() {
+  document.getElementById("roles").innerHTML = ROLES.map(([k, l]) => `<button class="role" data-role="${k}" aria-pressed="${S.role === k}">${l}</button>`).join("");
+  const links = [["home", "Home"], ["search", "Search Players"], ["how", "How It Works"], ["pricing", "Pricing"]];
+  if (signedIn()) links.push(["me", "My Account"]);
+  if (S.role === "mod") links.push(["admin", "Moderation"]);
+  document.getElementById("nav").innerHTML = links.map(([k, l]) => `<button data-go="${k}" ${S.view === k || (k === "search" && S.view === "profile") ? 'aria-current="page"' : ""}>${l}</button>`).join("");
+  document.getElementById("who").innerHTML = signedIn()
+    ? `<span class="avatar">${NAMES[S.role][0]}</span><span>${NAMES[S.role]}</span>${isPlus() ? '<span class="chip vio">Plus</span>' : ""}`
+    : `<button class="btn sm" data-role="free">Log in</button><button class="btn sm primary" data-role="free">Register</button>`;
+}
+
+// ---------- Views ----------
+const V = {};
+V.home = () => `
+  <section class="hero"><canvas id="waves" aria-hidden="true"></canvas>
+    <div class="inner wrap">
+      <span class="chip vio">Community-powered · Human-moderated</span>
+      <h1 style="margin-top:18px">Know Who You're <span class="iris-text">Playing With.</span></h1>
+      <p class="lede">ServerSentry is the community-powered gaming reputation network. Discover player reputations, recognise great teammates and help build better gaming communities.</p>
+      <div class="row" style="justify-content:center;margin-top:26px">
+        <button class="btn primary" data-go="search">Search Players</button>
+        <button class="btn" data-role="free">Create Free Account</button>
+      </div>
+      ${searchBar("hero")}
+      <p class="tiny muted" style="margin-top:12px">Try searching <b>Shadow</b>: three different players share that name and are kept as separate profiles.</p>
+    </div>
+  </section>
+  <div class="wrap" style="padding-block:44px 0">
+    <h2 class="section-title">How ServerSentry works</h2>
+    <ol class="stack" style="padding:0;margin:0;list-style:none;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">
+      ${[["Search for a player", "By username, game and platform."], ["Discover their reputation", "Positive and negative feedback shown separately. No single score."], ["Read feedback", "Plus members read approved comments and moderator summaries."], ["Recognise good teammates", "Give a commendation in seconds."], ["Report responsibly", "Reports stay private until a moderator reviews them."]]
+        .map(([t, x], i) => `<li class="glass pad"><p class="tiny muted">Step ${i + 1}</p><h3 style="font-size:16px;margin-top:6px">${t}</h3><p class="small muted" style="margin-top:6px">${x}</p></li>`).join("")}
+    </ol>
+    <div class="grid2" style="margin-top:28px">
+      <div class="glass pad"><h3>Supported games</h3><div class="row" style="margin-top:14px">${GAMES.map((g) => `<button class="chip" style="cursor:pointer;background:none" data-search-game="${esc(g)}">${g}</button>`).join("")}</div></div>
+      <div class="glass pad"><h3>Supported platforms</h3><div class="stack" style="margin-top:12px;gap:0">${PLATFORMS.map(([p, s]) => `<div class="row" style="justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><span>${p}</span><span class="chip ${s === "verified" ? "ok" : ""}">${s === "verified" ? "Verified linking" : "Manual identification"}</span></div>`).join("")}</div>
+        <p class="tiny muted" style="margin-top:10px">Only Steam offers an official sign-in we use for ownership verification today. Other platforms rely on moderator-reviewed claims.</p></div>
+    </div>
+  </div>`;
+
+function searchBar(kind) {
+  const s = S.search;
+  return `<form class="searchbar glass ${kind === "hero" ? "iris glow" : ""}" id="searchform" role="search" ${kind === "hero" ? "" : 'style="margin:0;max-width:none"'}>
+    <label class="field"><span class="lbl" style="position:absolute;left:-9999px">Username</span><input class="input" id="q" placeholder="Username or player ID" value="${esc(s.q)}" maxlength="64"></label>
+    <label class="field"><span class="lbl" style="position:absolute;left:-9999px">Game</span><select class="input" id="g"><option value="">All games</option>${GAMES.map((g) => `<option ${s.game === g ? "selected" : ""}>${g}</option>`).join("")}</select></label>
+    <label class="field"><span class="lbl" style="position:absolute;left:-9999px">Platform</span><select class="input" id="p"><option value="">All platforms</option>${PLATFORMS.map(([p]) => `<option ${s.platform === p ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+    <button class="btn primary" type="submit">Search</button></form>`;
+}
+
+V.search = () => {
+  const s = S.search, q = s.q.trim().toLowerCase();
+  const res = DB.profiles.filter((p) => (!q || p.name.toLowerCase().includes(q) || p.id.toLowerCase() === q) && (!s.game || p.game === s.game) && (!s.platform || p.platform === s.platform));
+  const dup = {}; res.forEach((p) => (dup[p.name] = (dup[p.name] ?? 0) + 1));
+  return `<div class="wrap stack">
+    <h1 style="font-size:28px">Search players</h1>
+    <p class="muted small">Players with the same username are separate profiles and are never merged automatically.</p>
+    ${searchBar("compact")}
+    <p class="small muted" aria-live="polite">${res.length} profile${res.length === 1 ? "" : "s"} found</p>
+    ${res.length ? res.map((p) => { const st = stats(p.id); return `<button class="glass result" data-open="${p.id}">
+        <div style="min-width:0;flex:1"><div class="row"><span class="name">${esc(p.name)}</span>${ident(p.ident)}${p.owner ? '<span class="chip vio">Claimed by owner</span>' : ""}</div>
+        <p class="small muted" style="margin-top:4px">${p.game} · ${p.platform} · <code>${p.id}</code></p>
+        ${dup[p.name] > 1 ? '<p class="tiny" style="color:var(--warn);margin-top:4px">Shares a username with another profile. Check game, platform and ID.</p>' : ""}</div>
+        <div class="counts"><span class="count pos" title="Approved commendations">+${st.pos}</span><span class="count neg" title="Published reports">−${st.neg}</span></div></button>`; }).join("")
+      : `<div class="glass pad" style="text-align:center"><p>No matching player profiles.</p><p class="small muted" style="margin-top:6px">In the full app, signed-in members can add a missing player as an unverified profile.</p></div>`}
+  </div>`;
+};
+
+const TABS = [["overview", "Overview"], ["positive", "Positive Feedback"], ["negative", "Negative Reports"], ["linked", "Linked Accounts"], ["history", "Reputation History"]];
+V.profile = () => {
+  const p = profile(S.pid), st = stats(p.id), own = isOwnerOf(p);
+  return `<div class="wrap">
+    <section class="glass iris pad" style="padding:28px">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div style="min-width:0">
+          <div class="row">${ident(p.ident)}${p.owner ? '<span class="chip vio">Claimed by owner</span>' : ""}<span class="chip warn">Demo data</span></div>
+          <h1 style="font-size:38px;margin-top:10px">${esc(p.name)}</h1>
+          <p class="muted small" style="margin-top:6px">Game: <span style="color:var(--text)">${p.game}</span> · Platform: <span style="color:var(--text)">${p.platform}</span></p>
+          <p class="muted small">ID <code style="color:var(--text)">${p.id}</code> · Profile created ${fmt(p.created)}</p>
+          <p class="tiny muted" style="margin-top:8px;max-width:520px">${IDENT[p.ident][2]}</p>
+        </div>
+        <div class="stack" style="gap:8px;min-width:200px">
+          ${own ? '<span class="notice" style="font-size:12.5px">This is your profile</span>' : `<button class="btn pos" data-act="commend">Give Commendation</button><button class="btn" data-act="report">Report behaviour</button>`}
+          ${!p.owner && signedIn() && S.role !== "owner" ? '<button class="btn sm" data-act="claim">Is this you? Claim profile</button>' : ""}
+        </div>
+      </div>
+      <div class="row" style="margin-top:20px;gap:12px"><div class="big pos"><strong>+${st.pos}</strong><span>Positive commendations</span></div><div class="big neg"><strong>−${st.neg}</strong><span>Published negative reports</span></div></div>
+    </section>
+    <div class="tabs" role="tablist">${TABS.map(([k, l]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
+    <div style="margin-top:20px">${tabBody(p, st, own)}</div>
+  </div>`;
+};
+function lock(title, text) {
+  return `<section class="glass iris glow lock"><h2>${title}</h2><p class="muted" style="margin-top:8px">${text}</p>
+    <p class="price"><span class="iris-text">£0.99</span><span class="small muted">/month</span></p>
+    <ul class="small muted" style="list-style:none;padding:0;margin:14px auto;max-width:360px;text-align:left;display:grid;gap:6px">${["Approved commendation comments", "Moderated report summaries and categories", "Dates, dispute and resolution status", "Month-by-month reputation history"].map((f) => `<li>✓ ${f}</li>`).join("")}</ul>
+    ${signedIn() ? '<button class="btn primary" data-act="upgrade">Upgrade to ServerSentry Plus</button>' : '<button class="btn primary" data-role="free">Sign in to upgrade</button>'}
+    <p class="tiny muted" style="margin-top:12px">Plus never shows private evidence, unmoderated reports or who reported someone.</p></section>`;
+}
+function tabBody(p, st, own) {
+  if (S.tab === "overview") return `<div class="grid2"><section class="glass pad"><h3>Community reputation statistics</h3><p class="small muted" style="margin-top:4px">Shown separately. ServerSentry never calculates an overall score.</p>
+    <dl class="stats" style="margin-top:12px">
+      <div><dt>Positive commendations<span>Approved recognitions from other members.</span></dt><dd style="color:var(--pos)">+${st.pos}</dd></div>
+      <div><dt>Total submissions<span>All negative reports ever submitted, in any state.</span></dt><dd>${st.total}</dd></div>
+      <div><dt>Published entries<span>Reviewed and published by a moderator as allegations.</span></dt><dd>${st.neg}</dd></div>
+      <div><dt>Pending moderation<span>Reports and comments awaiting review. Not public.</span></dt><dd>${st.pending}</dd></div>
+      <div><dt>Disputed entries<span>The player has responded or appealed.</span></dt><dd>${st.disputed}</dd></div>
+      <div><dt>Rejected or removed<span>Didn't meet guidelines, or removed after review.</span></dt><dd>${st.rejected}</dd></div>
+    </dl></section>
+    <aside class="glass pad"><h3>Reading this profile</h3><ul class="small muted" style="padding-left:18px;display:grid;gap:8px;margin:12px 0 0"><li>Published reports are <b style="color:var(--text)">community allegations</b>, not proof.</li><li><b style="color:var(--text)">Disputed</b> means the player responded or appealed.</li><li>A <b style="color:var(--text)">resolved moderation outcome</b> is a moderator decision, not a legal finding.</li><li>Reporter identities and evidence are never shown.</li></ul></aside></div>`;
+  if (S.tab === "positive") {
+    if (!isPlus()) return lock("Unlock Player Feedback", "See what other players have said about this account.");
+    const items = (DB.comms[p.id] ?? []).filter((c) => c.status === "approved");
+    return `<div class="stack">${items.map((c) => `<article class="glass pad"><div class="row" style="justify-content:space-between"><span class="chip ok">${COMM_CATS[c.cat]}</span><span class="tiny muted">${fmt(c.date)}</span></div><p style="margin-top:10px" class="${c.comment ? "" : "muted small"}">${c.comment ? esc(c.comment) : "No written comment."}</p></article>`).join("") || '<p class="muted">No commendations yet.</p>'}</div>`;
+  }
+  if (S.tab === "negative") {
+    if (!isPlus() && !own) return lock("Unlock Report Summaries", "Read moderated report summaries, categories, dates and dispute status.");
+    const items = DB.reports.filter((r) => r.pid === p.id && PUBLIC.includes(r.status));
+    return `<div class="stack">${own && !isPlus() ? '<div class="notice">You own this profile, so you can read reports about you and respond or appeal for free.</div>' : ""}
+      ${items.map((r) => `<article class="glass pad"><div class="row">${statusChip(r.status)}<span class="chip">${REP_CATS[r.cat]}</span><span class="tiny muted" style="margin-left:auto">Ref ${r.ref} · published ${fmt(d(r.days))}</span></div>
+        <p class="tiny muted" style="margin-top:12px;text-transform:uppercase;letter-spacing:.08em">Moderator summary of the allegation</p><p style="margin-top:4px">${esc(r.summary)}</p>
+        ${r.outcome ? `<div class="subtle" style="margin-top:10px;border-color:rgba(139,92,246,.4)"><p class="tiny" style="color:var(--lav);text-transform:uppercase;letter-spacing:.08em">Moderation outcome</p><p class="small" style="margin-top:4px">${esc(r.outcome)}</p></div>` : ""}
+        ${r.response && r.responseStatus !== "pending" ? `<div class="subtle" style="margin-top:10px"><p class="tiny muted" style="text-transform:uppercase;letter-spacing:.08em">Player's response</p><p class="small" style="margin-top:4px">${esc(r.response)}</p></div>` : ""}
+        ${own ? ownerActions(r) : ""}</article>`).join("") || '<p class="muted">No published reports.</p>'}</div>`;
+  }
+  if (S.tab === "linked") return `<section class="glass pad"><h3>Linked accounts</h3><p class="small muted" style="margin-top:4px">Never linked because usernames match. Only the owner can add or remove links.</p>
+    <div style="margin-top:12px">${p.linked.length ? p.linked.map(([u, pl, s]) => `<div class="row" style="justify-content:space-between;padding:10px 0;border-top:1px solid var(--line)"><span>${esc(u)} <span class="small muted">· ${pl}</span></span>${ident(s)}</div>`).join("") : '<p class="muted small">No linked accounts. Identified manually by username.</p>'}</div></section>`;
+  if (S.tab === "history") {
+    if (!isPlus()) return lock("Unlock Reputation History", "See how this player's feedback changed month by month.");
+    const months = [...Array(12)].map((_, i) => { const x = new Date(); x.setMonth(x.getMonth() - 11 + i); return x; });
+    const key = (x) => `${x.getFullYear()}-${x.getMonth()}`;
+    const pos = {}, neg = {};
+    (DB.comms[p.id] ?? []).filter((c) => c.status === "approved").forEach((c) => (pos[key(c.date)] = (pos[key(c.date)] ?? 0) + 1));
+    DB.reports.filter((r) => r.pid === p.id && PUBLIC.includes(r.status)).forEach((r) => (neg[key(d(r.days))] = (neg[key(d(r.days))] ?? 0) + 1));
+    const max = Math.max(1, ...Object.values(pos), ...Object.values(neg));
+    return `<section class="glass pad"><h3>Reputation history (last 12 months)</h3>
+      <div class="bars" role="img" aria-label="Monthly positive and negative feedback">${months.map((m) => `<div class="m"><div class="pair"><div class="b" style="height:${((pos[key(m)] ?? 0) / max) * 100}%;background:var(--pos)" title="${pos[key(m)] ?? 0} positive"></div><div class="b" style="height:${((neg[key(m)] ?? 0) / max) * 100}%;background:var(--neg)" title="${neg[key(m)] ?? 0} published reports"></div></div><span class="tiny muted">${m.toLocaleString("en-GB", { month: "short" })}</span></div>`).join("")}</div>
+      <div class="row small muted" style="margin-top:12px"><span><span style="display:inline-block;width:10px;height:10px;background:var(--pos);border-radius:2px"></span> Positive</span><span><span style="display:inline-block;width:10px;height:10px;background:var(--neg);border-radius:2px"></span> Published reports</span></div></section>`;
+  }
+}
+function ownerActions(r) {
+  const bits = [];
+  if (r.responseStatus === "pending") bits.push('<span class="chip info">Your response: awaiting moderation</span>');
+  else if (!r.response) bits.push(`<button class="btn sm" data-respond="${r.id}">Write a response</button>`);
+  if (r.status === "appealed") bits.push('<span class="chip info">Appeal under review</span>');
+  else if (r.status !== "resolved") bits.push(`<button class="btn sm" data-appeal="${r.id}">Appeal this report</button>`);
+  return `<div class="row" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">${bits.join("")}</div>`;
+}
+
+V.pricing = () => `<div class="wrap stack" style="max-width:900px">
+  <h1 style="font-size:34px;text-align:center">Simple, fair pricing</h1>
+  <p class="muted" style="text-align:center">Reputation totals are free for everyone. Plus lets you read what the community has said.</p>
+  <div class="grid2" style="grid-template-columns:1fr 1fr;margin-top:12px">
+    <section class="glass pad"><h2>Free</h2><p style="font-family:var(--display);font-size:36px;margin-top:6px">£0<span class="small muted">/month</span></p>
+      <ul class="small" style="list-style:none;padding:0;display:grid;gap:7px;margin-top:14px">${["Search players and view profiles", "See positive and negative totals", "Give commendations and submit reports", "See, respond to and appeal reports about you"].map((f) => `<li>✓ ${f}</li>`).join("")}</ul></section>
+    <section class="glass iris glow pad"><h2 class="iris-text">ServerSentry Plus</h2><p style="font-family:var(--display);font-size:36px;margin-top:6px">£0.99<span class="small muted">/month</span></p>
+      <ul class="small" style="list-style:none;padding:0;display:grid;gap:7px;margin-top:14px">${["Everything in Free", "Read approved commendation comments", "Read moderated report summaries", "Dates, categories, dispute and resolution status", "Reputation history"].map((f) => `<li>✓ ${f}</li>`).join("")}</ul>
+      <div style="margin-top:18px">${isPlus() ? '<span class="chip vio">You have Plus</span>' : signedIn() ? '<button class="btn primary" data-act="upgrade">Upgrade to Plus</button>' : '<button class="btn primary" data-role="free">Sign in to upgrade</button>'}</div></section>
+  </div>
+  <p class="small muted" style="text-align:center">Money can never buy: access to evidence, unmoderated reports, reporter identities, or removal of reports.</p></div>`;
+
+V.how = () => `<div class="wrap stack" style="max-width:760px">
+  <h1 style="font-size:32px">How ServerSentry works</h1>
+  ${[["Separate identities", "A profile is one username on one game and platform. Same-name players are never merged."], ["Commendations", "Plain commendations appear instantly. Written comments are checked by a moderator first. One per category per player."], ["Reports", "Private when submitted. A moderator reviews, may ask for more information, then rejects or publishes a neutral summary. Reporter identity, the raw description and evidence are never public."], ["Right of reply", "Profile owners read reports about them for free, can respond publicly and can appeal to a senior moderator."], ["Security", "Two-factor authentication is required to contribute. Moderators work in verified sessions and every action is audit-logged."]]
+    .map(([t, x]) => `<section class="glass pad"><h3>${t}</h3><p class="muted" style="margin-top:6px">${x}</p></section>`).join("")}</div>`;
+
+V.me = () => {
+  const mine = DB.myReports;
+  return `<div class="wrap stack" style="max-width:860px">
+    <h1 style="font-size:30px">Hi, ${NAMES[S.role]}</h1>
+    <p class="muted">${isPlus() ? "ServerSentry Plus" : "Free plan"} · two-factor authentication enabled</p>
+    <section class="glass pad"><h3>Reports you submitted</h3>${mine.length ? mine.map((r) => `<div class="row" style="padding:10px 0;border-top:1px solid var(--line);margin-top:8px">${statusChip(r.status, true)}<span class="small">${REP_CATS[r.cat]} · ${esc(profile(r.pid).name)}</span><span class="tiny muted" style="margin-left:auto">${r.ref}</span></div>`).join("") : '<p class="small muted" style="margin-top:6px">None yet. Open a player profile and choose Report behaviour.</p>'}</section>
+    <section class="glass pad"><h3>Security</h3><div class="stack small" style="margin-top:10px;gap:8px">
+      <div class="row" style="justify-content:space-between"><span>Passkey · Laptop Touch ID</span><span class="chip ok">Active</span></div>
+      <div class="row" style="justify-content:space-between"><span>Authenticator app</span><span class="chip ok">Active</span></div>
+      <div class="row" style="justify-content:space-between"><span>Recovery codes</span><span class="muted">8 unused</span></div>
+      <div class="row" style="justify-content:space-between"><span>Active sessions</span><span class="muted">2 devices</span></div></div></section>
+    <section class="glass pad"><h3>Privacy & data</h3><p class="small muted" style="margin-top:6px">Download your data, ask for corrections, or delete your account. Requests are answered within one month.</p></section>
+  </div>`;
+};
+
+// ---------- Moderation ----------
+V.admin = () => {
+  const queue = DB.reports.filter((r) => ["submitted", "under_review"].includes(r.status));
+  const appeals = DB.reports.filter((r) => r.status === "appealed");
+  const responses = DB.reports.filter((r) => r.responseStatus === "pending");
+  const side = [["overview", "Overview"], ["reports", `Reports (${queue.length})`], ["queues", `Other queues (${DB.pendingComments.length + appeals.length + responses.length})`], ["audit", "Activity log"]];
+  let body = "";
+  if (S.adminView === "overview") {
+    const all = DB.reports;
+    body = `<h1 style="font-size:26px">Moderation overview</h1><div class="kpis" style="margin-top:16px">${[["Player profiles", DB.profiles.length], ["Commendations", Object.values(DB.comms).flat().length], ["Report submissions", all.length], ["Awaiting review", queue.length], ["Disputed / appealed", all.filter((r) => ["disputed", "appealed"].includes(r.status)).length], ["Comments pending", DB.pendingComments.length]]
+      .map(([l, v]) => `<div class="glass pad kpi"><p>${l}</p><p>${v}</p></div>`).join("")}</div>
+      <div class="notice" style="margin-top:16px">Staff powers only work in sessions verified with two-factor authentication (administrators need a passkey). Every action is recorded in a tamper-evident log.</div>`;
+  } else if (S.adminView === "reports") {
+    body = `<h1 style="font-size:26px">Reports awaiting review</h1><div class="stack" style="margin-top:14px">${queue.length ? queue.map((r) => `<button class="glass result" data-rid="${r.id}">${statusChip(r.status, true)}<code class="small">${r.ref}</code><span class="small">${REP_CATS[r.cat]} · ${esc(profile(r.pid).name)}</span>${r.flags.map((f) => `<span class="chip warn">${f}</span>`).join("")}<span class="tiny muted" style="margin-left:auto">${r.evidence} file(s)</span></button>`).join("") : '<p class="muted">Queue empty. Submit a report as a Free member to see it arrive here.</p>'}</div>`;
+  } else if (S.adminView === "report") {
+    const r = DB.reports.find((x) => x.id === S.rid), p = profile(r.pid);
+    body = `<button class="btn sm" data-admin="reports">← Reports</button>
+      <div class="row" style="margin-top:14px"><h1 style="font-size:26px">Report ${r.ref}</h1>${statusChip(r.status, true)}</div>
+      ${r.flags.length ? `<div class="notice warn" style="margin-top:12px">Automated abuse signals: ${r.flags.join(", ")}. Context, not proof.</div>` : ""}
+      <div class="grid2" style="margin-top:14px"><section class="glass pad stack">
+        <div class="row small"><span class="muted">Reported player:</span> ${esc(p.name)} · ${p.game} · ${p.platform}</div>
+        <div class="row small"><span class="muted">Category:</span> ${REP_CATS[r.cat]} · <span class="muted">Incident:</span> ${fmt(d(r.days + 1))}</div>
+        <div><p class="lbl">Reporter's private description (never published)</p><div class="subtle">${esc(r.desc)}</div></div>
+        <div><p class="lbl">Private evidence (${r.evidence})</p><div class="row">${[...Array(r.evidence)].map((_, i) => `<div style="width:120px;height:80px;border-radius:10px;background:linear-gradient(135deg,#2a2340,#171322);display:grid;place-items:center" class="tiny muted">Screenshot ${i + 1}</div>`).join("") || '<span class="small muted">None supplied.</span>'}</div><p class="tiny muted" style="margin-top:6px">Opening evidence is logged.</p></div>
+      </section>
+      <aside class="stack"><section class="glass pad"><h3>Actions</h3><div class="stack" style="margin-top:12px;gap:8px">
+        ${r.status === "submitted" ? '<button class="btn primary" data-mod="start">Start review</button>' : ""}
+        ${r.status === "under_review" ? '<button class="btn primary" data-mod="publish">Publish as allegation</button><button class="btn" data-mod="info">Request more information</button>' : ""}
+        <button class="btn neg" data-mod="reject">Reject</button></div></section>
+        <section class="glass pad small"><h3>Reporter history</h3><p class="tiny muted" style="margin-top:4px">Confidential. Never shown to the reported player.</p><p style="margin-top:8px">${r.reporter} · member for 4 months</p><p class="muted">Reports: 2 · published 1 · rejected 0</p></section></aside></div>`;
+  } else if (S.adminView === "queues") {
+    body = `<h1 style="font-size:26px">Other queues</h1>
+      <h3 style="margin-top:18px">Commendation comments</h3><div class="stack" style="margin-top:10px">${DB.pendingComments.map((c) => `<div class="glass pad small"><span class="chip ok">${COMM_CATS[c.cat]}</span> for ${esc(profile(c.pid).name)}<p class="subtle" style="margin-top:8px">${esc(c.comment)}</p><div class="row" style="margin-top:10px"><button class="btn sm pos" data-cm="approve" data-cid="${c.id}">Approve</button><button class="btn sm" data-cm="strip" data-cid="${c.id}">Approve without comment</button><button class="btn sm neg" data-cm="reject" data-cid="${c.id}">Reject</button></div></div>`).join("") || '<p class="small muted">Queue empty.</p>'}</div>
+      <h3 style="margin-top:22px">Player responses</h3><div class="stack" style="margin-top:10px">${responses.map((r) => `<div class="glass pad small">On ${r.ref}<p class="subtle" style="margin-top:8px">${esc(r.response)}</p><div class="row" style="margin-top:10px"><button class="btn sm pos" data-resp="publish" data-rid2="${r.id}">Publish response</button><button class="btn sm neg" data-resp="reject" data-rid2="${r.id}">Reject</button></div></div>`).join("") || '<p class="small muted">Queue empty.</p>'}</div>
+      <h3 style="margin-top:22px">Appeals</h3><div class="stack" style="margin-top:10px">${appeals.map((r) => `<div class="glass pad small">Appeal on ${r.ref} · ${REP_CATS[r.cat]}<p class="subtle" style="margin-top:8px">${esc(r.appeal ?? "")}</p><div class="row" style="margin-top:10px"><button class="btn sm pos" data-ap="uphold" data-rid2="${r.id}">Uphold appeal (remove report)</button><button class="btn sm neg" data-ap="reject" data-rid2="${r.id}">Reject appeal (report stands)</button></div></div>`).join("") || '<p class="small muted">No open appeals.</p>'}</div>`;
+  } else {
+    body = `<h1 style="font-size:26px">Activity log</h1><p class="small muted">Every moderation decision is recorded with who, what and when.</p><ul class="timeline small" style="margin-top:14px">${DB.log.slice().reverse().map((l) => `<li><b>${esc(l.a)}</b> · ${esc(l.t)} <span class="muted">· ${l.at.toLocaleTimeString("en-GB")}</span></li>`).join("") || '<li class="muted">No actions yet in this session.</li>'}</ul>`;
+  }
+  return `<div class="wrap admin"><aside class="glass side" style="padding:8px;height:fit-content">${side.map(([k, l]) => `<button data-admin="${k}" ${S.adminView === k || (k === "reports" && S.adminView === "report") ? 'aria-current="page"' : ""}>${l}</button>`).join("")}</aside><div>${body}</div></div>`;
+};
+const logMod = (a, t) => DB.log.push({ a, t, at: new Date() });
+
+// ---------- Actions ----------
+function needSignIn() { toast("Choose a member role in the View as bar to do this."); }
+function commendModal() {
+  if (!signedIn()) return needSignIn();
+  const p = profile(S.pid); let cat = "excellent_teammate";
+  modal("Give a commendation", `<div class="stack"><p class="lbl">What stood out?</p><div class="cat-grid">${Object.entries(COMM_CATS).map(([k, v]) => `<button class="cat" data-cat="${k}" aria-pressed="${k === cat}">${v}</button>`).join("")}</div>
+    <label class="field"><span class="lbl">Comment (optional)</span><textarea class="input" id="cm" rows="3" maxlength="500" placeholder="Great shot-calling and kept the team positive."></textarea></label>
+    <p class="tiny muted">Comments are checked by a moderator. Don't include personal information.</p>
+    <button class="btn pos" id="cmsend">Submit commendation</button></div>`, (m) => {
+    m.querySelectorAll(".cat").forEach((b) => b.addEventListener("click", () => { cat = b.dataset.cat; m.querySelectorAll(".cat").forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+    m.querySelector("#cmsend").addEventListener("click", () => {
+      const key = `${S.role}:${p.id}:${cat}`;
+      if (S.given.has(key)) { toast("You've already given this player that commendation."); return; }
+      S.given.add(key);
+      const comment = m.querySelector("#cm").value.trim();
+      if (comment) { DB.pendingComments.push({ id: ++seq, pid: p.id, cat, comment, by: NAMES[S.role] }); closeModal(); toast("Thanks! Your commendation counts once a moderator approves the comment."); }
+      else { (DB.comms[p.id] ??= []).unshift(C(cat, null, 0)); closeModal(); toast("Thanks! Your commendation is live."); }
+      render();
+    });
+  });
+}
+function reportModal() {
+  if (!signedIn()) return needSignIn();
+  const p = profile(S.pid);
+  if (DB.reports.some((r) => r.pid === p.id && r.mine === S.role && ["submitted", "under_review"].includes(r.status))) { toast("You already have an open report about this player."); return; }
+  modal(`Report ${p.name}`, `<form class="stack" id="rf"><div class="notice">Reports are private. Nothing is published unless a moderator reviews it and writes a neutral summary. Your identity is never shown.</div>
+    <label class="field"><span class="lbl">Category</span><select class="input" id="rc">${Object.entries(REP_CATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
+    <label class="field"><span class="lbl">What happened?</span><textarea class="input" id="rd" rows="4" minlength="20" maxlength="4000" required placeholder="Describe what you experienced, factually."></textarea></label>
+    <label class="field"><span class="lbl">Screenshots (optional)</span><input class="input" type="file" accept="image/png,image/jpeg,image/webp" multiple id="rfiles"></label>
+    <label class="row small"><input type="checkbox" required id="rok"> I confirm this report is accurate and follows the Community Guidelines.</label>
+    <p class="tiny" id="rerr" style="color:var(--neg)"></p>
+    <button class="btn primary" type="submit">Submit report for moderation</button></form>`, (m) => {
+    m.querySelector("#rf").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const desc = m.querySelector("#rd").value.trim();
+      if (desc.length < 20) { m.querySelector("#rerr").textContent = "Please describe what happened in at least 20 characters."; return; }
+      const r = { id: ++seq, ref: "R-" + Math.random().toString(36).slice(2, 10).toUpperCase(), pid: p.id, cat: m.querySelector("#rc").value, status: "submitted", days: 0, desc, reporter: NAMES[S.role], evidence: m.querySelector("#rfiles").files.length, flags: [], mine: S.role };
+      DB.reports.push(r); DB.myReports.push(r); closeModal(); render();
+      toast(`Report ${r.ref} submitted. Switch to Moderator to review it.`);
+    });
+  });
+}
+function upgradeModal() {
+  modal("Stripe Checkout (simulated)", `<div class="stack"><div class="subtle"><p class="small muted">ServerSentry Plus</p><p style="font-family:var(--display);font-size:28px">£0.99 <span class="small muted">per month</span></p></div>
+    <p class="small muted">In the real app this is Stripe's secure hosted checkout. ServerSentry never sees card numbers. Access is granted only after Stripe confirms payment.</p>
+    <button class="btn primary" id="pay">Pay £0.99 (test)</button></div>`, (m) => m.querySelector("#pay").addEventListener("click", () => { S.upgraded = true; closeModal(); render(); toast("Welcome to ServerSentry Plus! Feedback is now unlocked."); }));
+}
+function textModal(title, label, min, cb, placeholder = "") {
+  modal(title, `<form class="stack" id="tm"><label class="field"><span class="lbl">${label}</span><textarea class="input" id="tt" rows="4" placeholder="${esc(placeholder)}"></textarea></label><p class="tiny" id="te" style="color:var(--neg)"></p><button class="btn primary" type="submit">Confirm</button></form>`, (m) => {
+    m.querySelector("#tm").addEventListener("submit", (e) => { e.preventDefault(); const v = m.querySelector("#tt").value.trim(); if (v.length < min) { m.querySelector("#te").textContent = `Please write at least ${min} characters.`; return; } closeModal(); cb(v); render(); });
+  });
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button, [data-go], [data-role]"); if (!t) return;
+  const ds = t.dataset;
+  if (ds.role) { S.role = ds.role; if (S.view === "admin" && ds.role !== "mod") S.view = "home"; if (S.view === "me" && ds.role === "guest") S.view = "home"; render(); toast(`Now viewing as ${ROLES.find((r) => r[0] === ds.role)[1]}.`); return; }
+  if (ds.go) { go(ds.go, ds.go === "admin" ? { adminView: "overview" } : {}); return; }
+  if (ds.open) { go("profile", { pid: ds.open, tab: "overview" }); return; }
+  if (ds.tab) { S.tab = ds.tab; render(); return; }
+  if (ds.searchGame) { S.search = { q: "", game: ds.searchGame, platform: "" }; go("search"); return; }
+  if (ds.act === "commend") return commendModal();
+  if (ds.act === "report") return reportModal();
+  if (ds.act === "upgrade") return upgradeModal();
+  if (ds.act === "claim") { toast("Claim submitted. Ownership is never granted on a matching username; Steam uses its official sign-in, other platforms are reviewed by a moderator."); return; }
+  if (ds.respond) { const r = DB.reports.find((x) => x.id === +ds.respond); return textModal("Your public response", "Response (moderated before display)", 10, (v) => { r.response = v; r.responseStatus = "pending"; toast("Response sent for moderation."); }); }
+  if (ds.appeal) { const r = DB.reports.find((x) => x.id === +ds.appeal); return textModal("Appeal this report", "Grounds for appeal (private to moderators)", 20, (v) => { r.appeal = v; r.status = "appealed"; toast("Appeal submitted. A senior moderator who didn't publish it will decide."); }); }
+  if (ds.admin) { S.adminView = ds.admin; render(); return; }
+  if (ds.rid) { S.adminView = "report"; S.rid = +ds.rid; render(); return; }
+  if (ds.mod) {
+    const r = DB.reports.find((x) => x.id === S.rid);
+    if (ds.mod === "start") { r.status = "under_review"; logMod("Started review", r.ref); render(); }
+    if (ds.mod === "info") return textModal("Request more information", "Question for the reporter", 10, () => { logMod("Requested information", r.ref); toast("The reporter has been asked for more information."); });
+    if (ds.mod === "reject") return textModal("Reject report", "Reason (recorded)", 5, () => { r.status = "rejected"; logMod("Rejected report", r.ref); S.adminView = "reports"; toast(`${r.ref} rejected.`); });
+    if (ds.mod === "publish") return textModal("Publish as allegation", "Neutral public summary (no personal data, framed as an allegation)", 20, (v) => { r.status = "published"; r.summary = v; r.days = 0; logMod("Published report", r.ref); S.adminView = "reports"; toast(`${r.ref} published. The player's −count updates and they're notified.`); }, "A community member alleges that this player…");
+    return;
+  }
+  if (ds.cm) {
+    const i = DB.pendingComments.findIndex((c) => c.id === +ds.cid), c = DB.pendingComments[i]; DB.pendingComments.splice(i, 1);
+    if (ds.cm !== "reject") (DB.comms[c.pid] ??= []).unshift(C(c.cat, ds.cm === "approve" ? c.comment : null, 0));
+    logMod(ds.cm === "reject" ? "Rejected commendation comment" : "Approved commendation", profile(c.pid).name); render(); return;
+  }
+  if (ds.resp) { const r = DB.reports.find((x) => x.id === +ds.rid2); if (ds.resp === "publish") { r.responseStatus = "published"; if (r.status === "published") r.status = "disputed"; } else { r.response = null; r.responseStatus = null; } logMod(ds.resp === "publish" ? "Published player response" : "Rejected player response", r.ref); render(); return; }
+  if (ds.ap) { const r = DB.reports.find((x) => x.id === +ds.rid2); if (ds.ap === "uphold") { r.status = "removed"; } else { r.status = "resolved"; r.outcome = "Appeal reviewed by a senior moderator; the report was upheld."; } logMod(ds.ap === "uphold" ? "Upheld appeal" : "Rejected appeal", r.ref); render(); return; }
+});
+document.addEventListener("submit", (e) => {
+  if (e.target.id !== "searchform") return;
+  e.preventDefault();
+  S.search = { q: document.getElementById("q").value, game: document.getElementById("g").value, platform: document.getElementById("p").value };
+  go("search");
+});
+
+// ---------- Iridescent wave background ----------
+let raf;
+function waves() {
+  cancelAnimationFrame(raf);
+  const cv = document.getElementById("waves"); if (!cv) return;
+  const ctx = cv.getContext("2d"), still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const size = () => { cv.width = cv.offsetWidth * devicePixelRatio; cv.height = cv.offsetHeight * devicePixelRatio; };
+  size(); addEventListener("resize", size, { once: true });
+  const draw = (t) => {
+    const w = cv.width, h = cv.height; ctx.clearRect(0, 0, w, h);
+    const g = ctx.createRadialGradient(w * .2, h * .1, 0, w * .2, h * .1, w * .55); g.addColorStop(0, "rgba(139,92,246,.35)"); g.addColorStop(1, "rgba(139,92,246,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const g2 = ctx.createRadialGradient(w * .85, h * .2, 0, w * .85, h * .2, w * .4); g2.addColorStop(0, "rgba(217,70,239,.22)"); g2.addColorStop(1, "rgba(217,70,239,0)"); ctx.fillStyle = g2; ctx.fillRect(0, 0, w, h);
+    const lines = [[.42, 1, 0], [.5, .7, 1.7], [.58, .5, 3.1]];
+    lines.forEach(([y, a, ph], i) => {
+      const grad = ctx.createLinearGradient(0, 0, w, 0);
+      const shift = ((t / 9000) + i * .2) % 1;
+      ["#8b5cf6", "#d946ef", "#6366f1", "#22d3ee", "#f472b6", "#8b5cf6"].forEach((c, k) => grad.addColorStop(((k / 5) + shift) % 1, c));
+      ctx.strokeStyle = grad; ctx.globalAlpha = a * .7; ctx.lineWidth = (2 - i * .4) * devicePixelRatio; ctx.beginPath();
+      for (let x = 0; x <= w; x += 8) { const yy = h * y + Math.sin(x / w * Math.PI * 3 + t / 2400 + ph) * h * .08 + Math.sin(x / w * Math.PI * 7 + t / 3100) * h * .02; x ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); }
+      ctx.stroke(); ctx.globalAlpha = 1;
+    });
+    const fade = ctx.createLinearGradient(0, h * .55, 0, h); fade.addColorStop(0, "rgba(8,7,13,0)"); fade.addColorStop(1, "rgba(8,7,13,1)"); ctx.fillStyle = fade; ctx.fillRect(0, 0, w, h);
+    if (!still) raf = requestAnimationFrame(draw);
+  };
+  draw(0);
+}
+
+function render() {
+  renderChrome();
+  document.getElementById("app").innerHTML = (V[S.view] ?? V.home)();
+  if (S.view === "home") waves();
+}
+render();
+</script>

@@ -4,6 +4,17 @@
 
 > ⚠️ **Not yet cleared for public launch.** Mandatory launch gates (independent penetration test, DPIA, Online Safety Act assessment, legal review of the reporting model, etc.) are enforced in code and remain open. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md#launch-gates).
 
+## For players: nothing to install
+
+ServerSentry is a website that works as an app:
+1. Open the ServerSentry web address on any phone, tablet or computer.
+2. Tap **Install ServerSentry app** (Chrome, Edge or Android), or on iPhone tap **Share → Add to Home Screen**.
+3. It opens from your home screen or desktop like any other app. Updates are automatic.
+
+There are no downloads, installers or commands. The commands further down are only for whoever hosts the service.
+
+**Try the clickable prototype:** https://claude.ai/artifact/TTBK472MPTu4m1Ro7PLK5t (private to the owner until shared).
+
 ## Highlights
 
 - **Security first:** Argon2id passwords; mandatory MFA (passkeys/WebAuthn, TOTP, hashed one-time recovery codes) before contributing; passkey-only admin powers; re-authentication for sensitive changes; session rotation; lockouts; rate limits; CSP nonces; CSRF protection.

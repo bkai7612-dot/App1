@@ -5,6 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { CookieNotice } from "@/components/layout/CookieNotice";
 import { PrelaunchBanner } from "@/components/layout/PrelaunchBanner";
+import { InstallApp } from "@/components/layout/InstallApp";
 
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-display", display: "swap" });
@@ -13,6 +14,8 @@ export const metadata: Metadata = {
   title: { default: "ServerSentry — Know Who You're Playing With", template: "%s · ServerSentry" },
   description: "The community-powered gaming reputation network. Discover player reputations, recognise great teammates and help build better gaming communities.",
   robots: { index: true, follow: true },
+  applicationName: "ServerSentry",
+  appleWebApp: { capable: true, title: "ServerSentry", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = { themeColor: "#08070D", colorScheme: "dark" };
@@ -27,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main id="main" className="relative">{children}</main>
         <Footer />
         <CookieNotice />
+        <InstallApp />
       </body>
     </html>
   );
