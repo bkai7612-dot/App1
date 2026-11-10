@@ -9,7 +9,7 @@ import { REPORT_LABELS } from "@/lib/categories";
 import { InfoReply } from "./InfoReply";
 
 export const metadata: Metadata = { title: "My Reports" };
-const d = (x: Date | null) => (x ? new Date(x).toLocaleDateString("en-GB") : "—");
+const d = (x: Date | null) => (x ? new Date(x).toLocaleDateString("en-GB", { dateStyle: "medium" }) : "—");
 
 export default async function MyReports() {
   const auth = await requirePageAuth("/me/reports");
@@ -36,6 +36,7 @@ export default async function MyReports() {
                 <ReportStatusBadge status={r.status} audience="internal" />
                 <span className="text-sm">{REPORT_LABELS[r.category]} · <Link className="underline" href={`/players/${r.public_id}`}>{r.player}</Link></span>
                 <span className="ml-auto text-xs text-text-muted">{r.public_ref} · {d(r.created_at)} · {r.evidence} file(s)</span>
+                {["rejected", "removed"].includes(r.status) && <a className="w-full text-xs text-violet-lavender underline" href={`/complaints?category=moderation_decision&ref=${r.public_ref}`}>Disagree with this decision? Complain about it</a>}
               </div>
               {r.info_requested_at && r.status === "under_review" && (
                 <div className="mt-3 rounded-lg border border-sky-400/30 bg-sky-400/10 p-3 text-sm">
@@ -64,7 +65,7 @@ export default async function MyReports() {
         <section className="mt-10">
           <h2 className="font-display text-lg font-semibold">Your appeals</h2>
           <ul className="mt-4 grid gap-3">{appeals.map((a) => (
-            <li key={a.id} className="glass p-4 text-sm"><span className="chip border-ink-line">{a.status.replace("_", " ")}</span> <span className="ml-2">Report {a.public_ref} · {d(a.created_at)}</span>{a.decision_note && <p className="mt-2 text-text-muted">{a.decision_note}</p>}</li>
+            <li key={a.id} className="glass p-4 text-sm"><span className="chip border-ink-line">{a.status.replace("_", " ")}</span> <span className="ml-2">Report {a.public_ref} · {d(a.created_at)}</span>{a.decision_note && <p className="mt-2 text-text-muted">{a.decision_note}</p>}{a.status === "rejected" && <a className="mt-2 block text-xs text-violet-lavender underline" href={`/complaints?category=moderation_decision&ref=${a.public_ref}`}>Complain about this decision</a>}</li>
           ))}</ul>
         </section>
       )}

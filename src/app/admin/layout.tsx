@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { LayoutDashboard, Flag, ListChecks, Users, ScrollText, ShieldQuestion } from "lucide-react";
+import { LayoutDashboard, Flag, ListChecks, Users, ScrollText, ShieldQuestion, MessageSquareWarning } from "lucide-react";
 import { requirePageAuth } from "@/lib/server/page-auth";
 import { can, isStaff, isAdminRole, ROLE_LABELS } from "@/lib/rbac";
 import { Notice } from "@/components/ui/Card";
@@ -27,6 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin", label: "Overview", Icon: LayoutDashboard, show: true },
     { href: "/admin/reports", label: "Reports", Icon: Flag, show: can(r, "mod.reports.review") },
     { href: "/admin/queue", label: "Other queues", Icon: ListChecks, show: can(r, "mod.commendations.review") },
+    { href: "/admin/complaints", label: "Complaints", Icon: MessageSquareWarning, show: can(r, "mod.content.remove") },
     { href: "/admin/users", label: "Users", Icon: Users, show: can(r, "users.view") },
     { href: "/admin/privacy", label: "Privacy & recovery", Icon: ShieldQuestion, show: can(r, "privacy.requests.manage") },
     { href: "/admin/audit", label: "Audit log", Icon: ScrollText, show: can(r, "audit.view") },

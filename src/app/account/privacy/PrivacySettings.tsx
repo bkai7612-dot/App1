@@ -15,6 +15,8 @@ export function PrivacySettings({ requests }: { requests: { id: string; kind: st
   const { run, dialog } = useReauth();
   const [kind, setKind] = useState("rectification");
   const [details, setDetails] = useState("");
+  const [targetType, setTargetType] = useState("");
+  const [targetRef, setTargetRef] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [confirm, setConfirm] = useState("");
   const errText = (e: unknown) => (e instanceof ClientApiError ? e.message : "Something went wrong.");
@@ -29,14 +31,21 @@ export function PrivacySettings({ requests }: { requests: { id: string; kind: st
       </section>
       <section className="glass p-6">
         <h2 className="font-display text-lg font-semibold">Make a request</h2>
-        <form className="mt-3 space-y-3" onSubmit={async (e) => { e.preventDefault(); try { await api("/api/account/privacy-request", { body: { kind, details } }); setDetails(""); setMsg("Request received. We'll respond within one month."); router.refresh(); } catch (e) { setMsg(errText(e)); } }}>
+        <form className="mt-3 space-y-3" onSubmit={async (e) => { e.preventDefault(); try { await api("/api/account/privacy-request", { body: { kind, details, targetType: targetType || undefined, targetRef: targetRef.trim() || undefined } }); setDetails(""); setTargetRef(""); setMsg("Request received. We'll respond within one month."); router.refresh(); } catch (e) { setMsg(errText(e)); } }}>
           <select value={kind} onChange={(e) => setKind(e.target.value)} className="input" aria-label="Request type">{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          {kind === "erasure" && <p className="rounded-lg border border-ink-line bg-ink/50 p-3 text-xs text-text-muted">Erasure removes your personal data, such as your email, display name, sign-in details, comments and votes. Where we must keep a record to stay fair to other people (for example a published report you submitted, or a moderation decision), we keep it without your name. A report <em>about</em> you is assessed on its merits: we remove it if it&apos;s inaccurate or we no longer have a lawful reason to show it. To delete your whole account straight away, use &ldquo;Delete my account&rdquo; below.</p>}
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,14rem)_1fr]">
+            <select value={targetType} onChange={(e) => setTargetType(e.target.value)} className="input" aria-label="What is it about?">
+              <option value="">About my whole account</option><option value="report_about_me">A report about me</option><option value="report">A report I submitted</option><option value="player_comment">A comment</option><option value="commendation">A commendation</option><option value="player_profile">A player profile</option><option value="gaming_account">A linked gaming account</option>
+            </select>
+            {targetType && <input value={targetRef} onChange={(e) => setTargetRef(e.target.value)} maxLength={300} className="input" placeholder="Link or reference, e.g. R-1A2B3C4D" aria-label="Link or reference" />}
+          </div>
           <textarea required minLength={10} maxLength={4000} rows={3} value={details} onChange={(e) => setDetails(e.target.value)} className="input" placeholder="Tell us what you need." aria-label="Details" />
           <button className="btn-ghost">Submit request</button>
         </form>
         {requests.length > 0 && (
           <ul className="mt-5 divide-y divide-ink-line text-sm">
-            {requests.map((r) => <li key={r.id} className="flex justify-between py-2"><span>{KINDS[r.kind] ?? r.kind}</span><span className="text-text-muted">{r.status.replace("_", " ")} · due {new Date(r.due_at).toLocaleDateString("en-GB")}</span></li>)}
+            {requests.map((r) => <li key={r.id} className="flex justify-between py-2"><span>{KINDS[r.kind] ?? r.kind}</span><span className="text-text-muted">{r.status.replace("_", " ")} · due {new Date(r.due_at).toLocaleDateString("en-GB", { dateStyle: "medium" })}</span></li>)}
           </ul>
         )}
       </section>

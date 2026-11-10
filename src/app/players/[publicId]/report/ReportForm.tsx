@@ -39,7 +39,7 @@ export function ReportForm({ profileId, publicId }: { profileId: string; publicI
   return (
     <form onSubmit={submit} className="glass space-y-5 p-6">
       <label className="block"><span className="label">Category</span>
-        <select name="category" required className="input">{Object.entries(REPORT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+        <select name="category" required defaultValue="" className="input"><option value="" disabled>Choose a category…</option>{Object.entries(REPORT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       </label>
       <label className="block"><span className="label">Approximate incident date</span>
         <input type="date" name="incidentDate" required max={today} className="input" />

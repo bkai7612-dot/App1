@@ -23,7 +23,7 @@ export default async function Users({ searchParams }: { searchParams: Promise<{ 
             <tr key={u.id}><td className="p-3"><Link className="underline" href={`/admin/users/${u.id}`}>{u.display_name}</Link><div className="text-xs text-text-muted">{u.email}</div></td>
               <td className="p-3">{ROLE_LABELS[u.role]}</td><td className="p-3">{u.mfa_enabled ? "Yes" : "No"}</td>
               <td className="p-3">{u.suspended_at ? <span className="text-neg">Suspended</span> : u.reporting_restricted_until && u.reporting_restricted_until > new Date() ? <span className="text-amber-300">Reporting restricted</span> : "Active"}</td>
-              <td className="p-3 text-text-muted">{new Date(u.created_at).toLocaleDateString("en-GB")}</td></tr>))}</tbody>
+              <td className="p-3 text-text-muted">{new Date(u.created_at).toLocaleDateString("en-GB", { dateStyle: "medium" })}</td></tr>))}</tbody>
         </table>
       </div>
     </div>

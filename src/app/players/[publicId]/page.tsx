@@ -14,6 +14,7 @@ import { Empty, Notice } from "@/components/ui/Card";
 import { PremiumLock } from "@/components/premium/PremiumLock";
 import { CommendButton } from "@/components/feedback/CommendButton";
 import { ClaimProfileButton } from "@/components/feedback/ClaimProfileButton";
+import { TabStrip } from "@/components/ui/ScrollActiveIntoView";
 import { OwnerReportActions } from "@/components/feedback/OwnerReportActions";
 import { VoteButtons } from "@/components/feedback/VoteButtons";
 import { verificationOptions } from "@/lib/server/verification-options";
@@ -54,7 +55,19 @@ export default async function PlayerPage({ params, searchParams }: Props) {
     getVoteStats(profile.id, viewer?.user.id),
   ]);
   const isOwner = !!viewer && profile.owner_user_id === viewer.user.id;
+  // P-08: tell people up front if they've already commended this player in the last 24 hours.
+  const lastCommend = viewer && !isOwner ? await withDb2(viewer.db, (tx) => tx.one<{ next_at: Date }>(
+    `SELECT max(created_at) + interval '24 hours' AS next_at FROM commendations WHERE submitter_user_id = $1 AND player_profile_id = $2 AND created_at > now() - interval '24 hours' HAVING count(*) > 0`, [viewer.user.id, profile.id])) : null;
   const returnTo = `/players/${profile.public_id}?tab=${tab}`;
+  // D5: live counts for the single "What Plus shows on this profile" panel.
+  const plusCounts = await withDb2(GUEST, async (tx) => {
+    const r = await tx.one<{ cc: string; pc: string; rs: string; m: string }>(`SELECT
+      (SELECT count(*) FROM public_commendations WHERE player_profile_id = $1 AND comment IS NOT NULL) AS cc,
+      (SELECT count(*) FROM public_player_comments WHERE player_profile_id = $1) AS pc,
+      (SELECT count(*) FROM public_reports WHERE player_profile_id = $1 AND public_summary IS NOT NULL) AS rs,
+      (SELECT count(DISTINCT date_trunc('month', created_at)) FROM public_commendations WHERE player_profile_id = $1 AND created_at > now() - interval '12 months') AS m`, [profile.id]);
+    return { commendationComments: Number(r?.cc ?? 0), comments: Number(r?.pc ?? 0), summaries: Number(r?.rs ?? 0), months: Number(r?.m ?? 0) };
+  });
   const dType = await withDb2(GUEST, (tx) => tx.one<{ t: string | null }>(`SELECT discord_connection_type AS t FROM platforms WHERE slug = $1`, [profile.platform_slug]));
   const claimOptions = verificationOptions(profile.platform_slug, dType?.t ?? null);
   const canVote = !!viewer && !isOwner && viewer.user.mfaEnabled && viewer.session.mfaVerified && viewer.user.emailVerified;
@@ -82,6 +95,9 @@ export default async function PlayerPage({ params, searchParams }: Props) {
           <div className="mb-5"><Notice tone="warn"><strong>Demonstration profile.</strong> This player, their feedback and their reports are fictional and exist only to demonstrate ServerSentry.</Notice></div>
         )}
 
+        {sp.created === "1" && (
+          <div className="mb-5" role="status"><Notice tone="ok"><strong>Profile created.</strong> {profile.display_name} can now be searched, commended and reported. If this is your own account, <a className="underline" href="/me/linked-accounts">claim and verify it</a> so you get notified and can respond.</Notice></div>
+        )}
         {/* Header */}
         <section className="iris-border glass relative overflow-hidden p-6 sm:p-8" aria-labelledby="player-name">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -103,7 +119,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
               <p className="mt-3 max-w-xl text-xs text-text-muted">{IDENTITY_META[profile.identity_status]?.desc}</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row lg:flex-col lg:items-stretch">
-              {!isOwner && <CommendButton profileId={profile.id} signedIn={!!viewer} plus={plus} />}
+              {!isOwner && <CommendButton profileId={profile.id} signedIn={!!viewer} plus={plus} nextAllowedAt={lastCommend?.next_at ? new Date(lastCommend.next_at).toISOString() : null} />}
               {!isOwner && <CommentButton profileId={profile.id} plus={plus} signedIn={!!viewer} />}
               {!isOwner && (
                 <Link href={viewer ? `/players/${profile.public_id}/report` : `/login?next=/players/${profile.public_id}/report`} className="btn-ghost"><Flag className="h-4 w-4" /> Report behaviour</Link>
@@ -128,12 +144,12 @@ export default async function PlayerPage({ params, searchParams }: Props) {
         </section>
 
         {/* Tabs */}
-        <nav className="mt-8 flex gap-1 overflow-x-auto border-b border-ink-line" aria-label="Profile sections">
+        <TabStrip className="mt-8 flex gap-1 overflow-x-auto border-b border-ink-line" label="Profile sections" active={tab}>
           {TABS.map((t) => (
             <Link key={t.id} href={`/players/${profile.public_id}?tab=${t.id}`} aria-current={tab === t.id ? "page" : undefined} scroll={false}
               className={`whitespace-nowrap px-4 py-3 text-sm transition ${tab === t.id ? "nav-active" : "text-text-muted hover:text-text"}`}>{t.label}</Link>
           ))}
-        </nav>
+        </TabStrip>
 
         <div className="mt-6">
           {tab === "overview" && (
@@ -169,12 +185,12 @@ export default async function PlayerPage({ params, searchParams }: Props) {
 
           {tab === "positive" && (
             fullContent ? <PositiveList profileId={profile.id} /> :
-            <PremiumLock title="Unlock Player Feedback" text="See what other players have said about this account." returnTo={returnTo} signedIn={!!viewer} />
+            <PremiumLock title="What Plus shows on this profile" text="Commendation counts are free. Plus adds the written comments players left with them." returnTo={returnTo} signedIn={!!viewer} counts={plusCounts} />
           )}
 
           {tab === "comments" && (
             fullContent ? <CommentsList profileId={profile.id} isOwner={isOwner} plus={plus} /> :
-            <PremiumLock title="Unlock Player Comments" text="Read moderated comments from other players, and write your own." returnTo={returnTo} signedIn={!!viewer} />
+            <PremiumLock title="What Plus shows on this profile" text="Votes are free. Plus lets you read moderated comments from other players and write your own." returnTo={returnTo} signedIn={!!viewer} counts={plusCounts} />
           )}
 
           {tab === "negative" && (
@@ -200,7 +216,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
 
           {tab === "history" && (
             fullContent ? <History profileId={profile.id} /> :
-            <PremiumLock title="Unlock Reputation History" text="See how this player's feedback has changed month by month." returnTo={returnTo} signedIn={!!viewer} />
+            <PremiumLock title="What Plus shows on this profile" text="See how this player's feedback has changed month by month." returnTo={returnTo} signedIn={!!viewer} counts={plusCounts} />
           )}
         </div>
       </div>
@@ -301,7 +317,7 @@ async function NegativeList({ profileId, ownerUserId, plus, full, identity, clai
               {full ? <p className="mt-1 whitespace-pre-wrap break-words text-sm">{r.public_summary}</p>
                 : <p className="mt-1 select-none text-sm text-text-muted"><span aria-hidden="true" className="blur-[4px]">A community member alleges that this player behaved in a way that</span> <span className="ml-1 rounded bg-violet-brand/20 px-1.5 py-0.5 text-xs text-violet-lavender">Plus</span></p>}
               {r.status === "resolved" && r.outcome_note && (
-                <div className="mt-3 rounded-lg border border-violet-brand/30 bg-violet-brand/10 p-3 text-sm"><p className="text-xs uppercase tracking-wider text-violet-lavender">Moderation outcome · {fmtDate(r.resolved_at)}</p><p className="mt-1">{r.outcome_note}</p></div>
+                <div className="mt-3 rounded-lg border border-violet-brand/30 bg-violet-brand/10 p-3 text-sm"><p className="text-xs uppercase tracking-wider text-violet-lavender">Moderation outcome · {fmtDate(r.resolved_at)}</p><p className="mt-1">{r.outcome_note}</p>{ownerUserId && <a className="mt-2 inline-block text-xs text-violet-lavender underline" href={`/complaints?category=moderation_decision&ref=${r.public_ref}`}>Complain about this decision</a>}</div>
               )}
               {r.response && (
                 <div className="mt-3 rounded-lg border border-ink-line bg-white/[0.02] p-3 text-sm"><p className="text-xs uppercase tracking-wider text-text-muted">Player&apos;s response (free to read)</p><p className="mt-1 whitespace-pre-wrap break-words">{r.response}</p></div>
@@ -331,19 +347,34 @@ async function History({ profileId }: { profileId: string }) {
     <section className="glass p-6" aria-labelledby="hist-h">
       <h2 id="hist-h" className="font-display text-lg font-semibold">Reputation history (last 12 months)</h2>
       <p className="mt-1 text-sm text-text-muted">Approved commendations and published reports by month.</p>
-      <div className="mt-6 flex h-48 items-end gap-2" role="img" aria-label="Monthly bar chart of positive and negative feedback">
-        {rows.map((r) => (
-          <div key={r.month} className="flex flex-1 flex-col items-center gap-1">
-            <div className="flex h-40 w-full items-end justify-center gap-0.5">
-              <div className="w-1/2 max-w-3 rounded-t bg-pos/80" style={{ height: `${(r.positive / max) * 100}%` }} title={`${r.positive} positive`} />
-              <div className="w-1/2 max-w-3 rounded-t bg-neg/80" style={{ height: `${(r.negative / max) * 100}%` }} title={`${r.negative} published reports`} />
-            </div>
-            <span className="text-[10px] text-text-muted">{r.month.slice(5)}</span>
-          </div>
-        ))}
+      {/* P-14: y-axis scale, value labels and month + year. */}
+      <div className="mt-6 flex gap-2" role="img" aria-label="Monthly bar chart of positive and negative feedback. Values are listed in the table that follows.">
+        <div className="flex h-40 flex-col justify-between text-right text-[10px] text-text-muted tabular-nums" aria-hidden="true"><span>{max}</span><span>{Math.round(max / 2)}</span><span>0</span></div>
+        <div className="relative flex flex-1 items-end gap-1 overflow-x-auto sm:gap-2">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-40 border-y border-dashed border-ink-line/70" aria-hidden="true"><div className="absolute inset-x-0 top-1/2 border-t border-dashed border-ink-line/50" /></div>
+          {rows.map((r) => {
+            const d = new Date(`${r.month}-01T00:00:00Z`);
+            const m = d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+            return (
+              <div key={r.month} className="flex min-w-[28px] flex-1 flex-col items-center gap-1">
+                <div className="flex h-40 w-full items-end justify-center gap-0.5">
+                  <div className="flex w-1/2 max-w-4 flex-col items-center justify-end" style={{ height: "100%" }}>
+                    {r.positive > 0 && <span className="text-[9px] text-pos tabular-nums">{r.positive}</span>}
+                    <div className="w-full rounded-t bg-pos/80" style={{ height: `${(r.positive / max) * 100}%` }} title={`${r.positive} positive`} />
+                  </div>
+                  <div className="flex w-1/2 max-w-4 flex-col items-center justify-end" style={{ height: "100%" }}>
+                    {r.negative > 0 && <span className="text-[9px] text-neg tabular-nums">{r.negative}</span>}
+                    <div className="w-full rounded-t bg-neg/80" style={{ height: `${(r.negative / max) * 100}%` }} title={`${r.negative} published reports`} />
+                  </div>
+                </div>
+                <span className="text-[10px] leading-tight text-text-muted">{m}<br />{String(d.getUTCFullYear()).slice(2)}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
       <table className="sr-only"><caption>Monthly feedback</caption><thead><tr><th>Month</th><th>Positive</th><th>Published reports</th></tr></thead>
-        <tbody>{rows.map((r) => <tr key={r.month}><td>{r.month}</td><td>{r.positive}</td><td>{r.negative}</td></tr>)}</tbody></table>
+        <tbody>{rows.map((r) => <tr key={r.month}><td>{new Date(`${r.month}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })}</td><td>{r.positive}</td><td>{r.negative}</td></tr>)}</tbody></table>
       <div className="mt-4 flex gap-4 text-xs text-text-muted"><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-pos/80" /> Positive</span><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-neg/80" /> Published reports</span></div>
     </section>
   );

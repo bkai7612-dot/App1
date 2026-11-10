@@ -57,6 +57,15 @@ Only strictly necessary cookies are used (inventory at `/cookies`). No analytics
 - **Children's access assessment:** registration requires a confirmation of age 18+, but browsing is open. Assess whether children are likely to access the service and whether highly effective age assurance is needed. Don't publish information about minors. [LEGAL]
 - Maintain records, terms of service provisions on content handling, and complaints procedures. Review whenever features change.
 
+## 6a. Age policy (L-03) [LEGAL]
+- **Members must be 18+.** Enforced by self-declaration at registration (`confirmAge`, required). There is no age assurance beyond self-declaration.
+- **Reported players can be any age.** A gaming username doesn't reveal age, so reports may concern children. Safeguards today: moderators publish neutral, behaviour-only summaries; no personal data; anyone (including a parent or guardian) can use the web complaint form; complaints are tracked with 2-day acknowledgement and 14-day decision targets.
+- **For legal review before launch:**
+  - whether self-declaration is enough under the Online Safety Act children's access assessment (Ofcom guidance on "highly effective age assurance");
+  - whether publishing reports about players who may be children needs extra conditions (UK GDPR Art. 8, the ICO Children's Code / Age Appropriate Design Code), such as a higher evidence bar, shorter retention or not showing them publicly;
+  - parental requests: how to verify a parent or guardian.
+- Decision owner: operator, with a solicitor. Status: **open**. Launch gate `legal_review` must not be approved until this is answered.
+
 ## 7. Defamation and reputation [LEGAL]
 Mitigations implemented:
 - No auto-publication.

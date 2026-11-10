@@ -38,8 +38,9 @@ export async function sendVerificationEmail(tx: Tx, userId: string, email: strin
 }
 
 /** Security notification (in-app + email). Always sent regardless of preferences. */
-export async function securityNotice(tx: Tx, userId: string, email: string, what: string) {
-  await notify(tx, userId, "security", "Security settings changed", what, "/account/security");
+export async function securityNotice(tx: Tx, userId: string, email: string, what: string, title?: string) {
+  // P-06: say what happened in the title (e.g. a recovery-code sign-in is not a "settings change").
+  await notify(tx, userId, "security", title ?? "Security settings changed", what, "/account/security");
   await sendEmail({ to: email, ...emailTemplates.securityChange(what) });
 }
 

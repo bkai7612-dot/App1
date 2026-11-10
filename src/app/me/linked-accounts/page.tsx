@@ -28,7 +28,7 @@ const STEAM_MSG: Record<string, [string, "ok" | "warn" | "danger"]> = {
   invalid: ["That verification link was invalid or expired. Please try again.", "danger"],
 };
 
-export default async function LinkedAccounts({ searchParams }: { searchParams: Promise<{ steam?: string; discord?: string; battlenet?: string }> }) {
+export default async function LinkedAccounts({ searchParams }: { searchParams: Promise<{ steam?: string; discord?: string; battlenet?: string; created?: string }> }) {
   const auth = await requirePageAuth("/me/linked-accounts");
   const sp = await searchParams;
   const platforms = await getPlatforms();
@@ -49,6 +49,7 @@ export default async function LinkedAccounts({ searchParams }: { searchParams: P
       <PageHeader title="Linked Accounts" subtitle="Connect your gaming accounts to your ServerSentry profiles. Accounts are never linked automatically because a username matches." />
       <MeNav active="/me/linked-accounts" />
       {msg && <div className="mb-6"><Notice tone={msg[1]}>{msg[0]}</Notice></div>}
+      {sp.created && /^[A-Za-z0-9_-]{4,40}$/.test(sp.created) && <div className="mb-6" role="status"><Notice tone="ok"><strong>Profile created.</strong> Next, verify it&apos;s yours below so people know it&apos;s really you. <a className="underline" href={`/players/${sp.created}`}>View your profile</a></Notice></div>}
       <div className="mb-6"><Notice>
         <strong>How verification works.</strong> We use the fastest route each platform allows: its official sign-in (Steam, Battle.net), your Discord connections (the only automatic option for PlayStation), or a short code you place on your public gaming profile for a moderator to confirm. You only need this to claim a profile; everything else works without it. We will <strong>never</strong> ask for your platform password.
       </Notice></div>

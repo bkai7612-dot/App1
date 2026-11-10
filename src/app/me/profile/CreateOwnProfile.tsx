@@ -9,7 +9,7 @@ type Opt = { slug: string; name: string };
 export function CreateOwnProfile({ games, platforms }: { games: Opt[]; platforms: Opt[] }) {
   const [name, setName] = useState("");
   const [game, setGame] = useState("");
-  const [platform, setPlatform] = useState(platforms[0]?.slug);
+  const [platform, setPlatform] = useState("");
   const [err, setErr] = useState<unknown>(null);
   const router = useRouter();
   return (
@@ -19,7 +19,7 @@ export function CreateOwnProfile({ games, platforms }: { games: Opt[]; platforms
       <div className="grid gap-3 sm:grid-cols-3">
         <input required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Your in-game username" aria-label="Username" />
         <GameInput games={games} value={game} onChange={setGame} id="own-game" />
-        <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="input" aria-label="Platform">{platforms.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select>
+        <select value={platform} onChange={(e) => setPlatform(e.target.value)} required className="input" aria-label="Platform"><option value="" disabled>Choose a platform…</option>{platforms.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select>
       </div>
       <GateError error={err} />
       <button className="btn-primary" disabled={!game}>Create profile</button>

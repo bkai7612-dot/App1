@@ -34,7 +34,7 @@ export const POST = route({ auth: "pendingMfa", body: Body }, async ({ auth, bod
     await securityEvent(tx, auth!.user.id, "mfa_success", meta, { method });
     if (method === "recovery_code") {
       const left = await tx.one<{ n: string }>(`SELECT count(*) AS n FROM recovery_codes WHERE user_id = $1 AND used_at IS NULL`, [auth!.user.id]);
-      await securityNotice(tx, auth!.user.id, auth!.user.email, `A recovery code was used to sign in (${left?.n ?? 0} remaining)`);
+      await securityNotice(tx, auth!.user.id, auth!.user.email, `A recovery code was used to sign in (${left?.n ?? 0} remaining). If this wasn't you, reset your password and report it from Security settings.`, "Signed in with a recovery code");
     }
     return "ok" as const;
   });

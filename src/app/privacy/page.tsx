@@ -1,3 +1,4 @@
+import { OPERATOR, NOT_SET } from "@/lib/operator";
 import type { Metadata } from "next";
 import { Prose } from "@/components/ui/Prose";
 
@@ -6,7 +7,7 @@ export const metadata: Metadata = { title: "Privacy Notice" };
 export default function Privacy() {
   return (
     <Prose title="Privacy Notice" intro="How ServerSentry uses personal data, under UK GDPR and the Data Protection Act 2018." draft>
-      <h2>Controller</h2><p>[OPERATOR LEGAL NAME], [ADDRESS]. Privacy contact: [PRIVACY EMAIL]. ICO registration: [NUMBER].</p>
+      <h2>Controller</h2><p>{OPERATOR.name ?? NOT_SET}, {OPERATOR.address ?? NOT_SET}. Privacy contact: {OPERATOR.privacyEmail ?? NOT_SET}. ICO registration: {OPERATOR.icoNumber ?? NOT_SET}.</p>
       <h2>What we collect</h2>
       <table><thead><tr><th>Data</th><th>Purpose</th><th>Lawful basis (proposed)</th></tr></thead><tbody>
         <tr><td>Account data (email, display name, password hash, MFA credentials)</td><td>Provide and secure your account</td><td>Contract; legitimate interests (security)</td></tr>

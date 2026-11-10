@@ -5,8 +5,9 @@ import { assignableRoles, can, ROLE_LABELS, type Role } from "@/lib/rbac";
 import Link from "next/link";
 import { AdminAction } from "@/components/admin/AdminAction";
 import { ago } from "@/lib/time";
+import { securityEventLabel } from "@/lib/security-events";
 
-const dt = (d: Date | null) => (d ? new Date(d).toLocaleString("en-GB") : "—");
+const dt = (d: Date | null) => (d ? new Date(d).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—");
 
 export default async function AdminUser({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -82,7 +83,7 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
           {d.comments.length === 0 ? <p className="mt-2 text-text-muted">None.</p> : <ul className="mt-2 space-y-1">{d.comments.map((c) => <li key={c.id}><Link className="underline" href={`/players/${c.public_id}?tab=comments`}>{c.player}</Link> · <span className="text-text-muted">{c.status} · {ago(c.created_at)}</span><p className="truncate text-text-muted">{c.body}</p></li>)}</ul>}</div>
       </section>
       {d.modHistory.length > 0 && <section className="glass p-6 text-sm"><h2 className="font-display font-semibold">Moderation actions performed</h2><ul className="mt-2 space-y-1 text-text-muted">{d.modHistory.map((m, i) => <li key={i}>{m.action} on {m.target_type} · {dt(m.created_at)}</li>)}</ul></section>}
-      {d.events.length > 0 && <section className="glass p-6 text-sm"><h2 className="font-display font-semibold">Security events</h2><ul className="mt-2 space-y-1 text-text-muted">{d.events.map((e, i) => <li key={i}>{e.event_type.replace(/_/g, " ")} · {dt(e.created_at)}</li>)}</ul></section>}
+      {d.events.length > 0 && <section className="glass p-6 text-sm"><h2 className="font-display font-semibold">Security events</h2><ul className="mt-2 space-y-1 text-text-muted">{d.events.map((e, i) => <li key={i}>{securityEventLabel(e.event_type)} · {dt(e.created_at)}</li>)}</ul></section>}
     </div>
   );
 }

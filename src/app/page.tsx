@@ -97,7 +97,7 @@ export default async function Home() {
       <section className="mx-auto mt-20 grid max-w-7xl items-start gap-6 px-4 sm:px-6 lg:grid-cols-2">
         <div className="glass p-6">
           <h2 className="flex items-center gap-2 font-display text-xl font-semibold"><Gamepad2 className="h-5 w-5 text-violet-lavender" /> Supported games</h2>
-          <p className="mt-2 text-sm text-text-muted">{games.length} games and counting. Here are the most popular; search to find the rest.</p>
+          <p className="mt-2 text-sm text-text-muted">{games.length} games and counting. Here are some of them; search to find the rest.</p>
           <ul className="mt-4 flex flex-wrap gap-2">
             {games.slice(0, 18).map((g) => <li key={g.slug}><Link href={`/search?game=${g.slug}`} className="chip border-ink-line bg-white/[0.03] px-3 py-1.5 text-sm text-text hover:border-violet-brand/60">{g.name}</Link></li>)}
           </ul>

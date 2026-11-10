@@ -7,6 +7,7 @@ import { Empty } from "@/components/ui/Card";
 import { COMMENDATION_LABELS } from "@/lib/categories";
 import { BulkProvider, BulkCheck } from "@/components/admin/Bulk";
 import { ago } from "@/lib/time";
+import { TabStrip } from "@/components/ui/ScrollActiveIntoView";
 
 const TABS = [["comments", "Comments"], ["disputes", "Inaccurate-comment reports"], ["commendations", "Commendations"], ["verifications", "Verifications"], ["responses", "Responses"], ["appeals", "Appeals"], ["recent", "My recent decisions"]] as const;
 type Tab = (typeof TABS)[number][0];
@@ -59,11 +60,11 @@ const counts: Record<Tab, number> = { comments: q.comments.length, disputes: q.d
   return (
     <div className="space-y-8">
       <h1 className="font-display text-2xl font-semibold">Moderation queues</h1>
-      <nav aria-label="Queues" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <TabStrip label="Queues" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" active={tab}>
         {TABS.filter(([k]) => k !== "verifications" || canVerify).map(([k, l]) => (
           <Link key={k} href={`/admin/queue?tab=${k}`} aria-current={tab === k ? "page" : undefined} className={`chip shrink-0 px-3 py-1 ${tab === k ? "border-violet-brand/60 bg-violet-brand/10 text-violet-lavender" : "border-ink-line text-text-muted"}`}>{l} <span className="ml-1 rounded-full bg-ink-line px-1.5 text-[11px]">{counts[k]}</span></Link>
         ))}
-      </nav>
+      </TabStrip>
       {tab === "comments" && (<>
       <section>
         <h2 className="font-display text-xl font-semibold">Player comments awaiting approval</h2>
@@ -81,7 +82,7 @@ const counts: Record<Tab, number> = { comments: q.comments.length, disputes: q.d
       <section>
         <h2 className="font-display text-xl font-semibold">Recently approved comments</h2>
         <div className="mt-4 grid gap-2">{q.approvedComments.length === 0 ? <Empty title="None yet" /> : q.approvedComments.map((c) => (
-          <div key={c.id} className="glass p-4 text-sm"><p><Link className="underline" href={`/players/${c.public_id}?tab=comments`}>{c.player}</Link> · {c.tone} · {new Date(c.created_at).toLocaleDateString("en-GB")}</p>
+          <div key={c.id} className="glass p-4 text-sm"><p><Link className="underline" href={`/players/${c.public_id}?tab=comments`}>{c.player}</Link> · {c.tone} · {new Date(c.created_at).toLocaleDateString("en-GB", { dateStyle: "medium" })}</p>
             <p className="mt-2 whitespace-pre-wrap break-words text-text-muted">{c.body}</p>
             {!c.mine && <div className="mt-2"><AdminAction endpoint={`/api/admin/comments/${c.id}`} base={{ decision: "remove" }} label="Remove from account" tone="danger" fields={[{ name: "note", label: "Reason (recorded)", type: "textarea", required: true, min: 5, max: 1000 }]} /></div>}
           </div>))}</div>
@@ -92,7 +93,7 @@ const counts: Record<Tab, number> = { comments: q.comments.length, disputes: q.d
         <p className="mt-1 text-sm text-text-muted">Reported by the verified owner of the account. Remove the comment if it&apos;s inaccurate, unfair or breaks the guidelines; otherwise keep it and record why.</p>
         <div className="mt-4 grid gap-2">{q.disputes.length === 0 ? <Empty title="No open reports" /> : q.disputes.map((d) => (
           <div key={d.id} className="glass p-4 text-sm">
-            <p>Comment on <Link className="underline" href={`/players/${d.public_id}?tab=comments`}>{d.player}</Link> · reported {new Date(d.created_at).toLocaleString("en-GB")}</p>
+            <p>Comment on <Link className="underline" href={`/players/${d.public_id}?tab=comments`}>{d.player}</Link> · reported {new Date(d.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p>
             <p className="label mt-3">Comment</p><p className="whitespace-pre-wrap break-words rounded bg-ink/50 p-2">{d.body}</p>
             <p className="label mt-3">Owner&apos;s reason</p><p className="whitespace-pre-wrap break-words rounded bg-ink/50 p-2">{d.reason}</p>
             {d.mine ? <p className="mt-2 text-xs text-neg">Conflict of interest.</p> : <div className="mt-3 flex flex-wrap gap-2">
@@ -122,7 +123,7 @@ const counts: Record<Tab, number> = { comments: q.comments.length, disputes: q.d
             <div key={v.id} className="glass p-4 text-sm">
               <p><strong>{v.kind === "profile_claim" ? "Profile claim" : "Link verification"}</strong> · {v.claimant} → <Link className="underline" href={`/players/${v.public_id}`}>{v.player}</Link> ({v.platform}){v.username ? ` · account "${v.username}"` : ""}</p>
               {v.method === "profile_code" && (v.code_placed_at
-                ? <p className="mt-2 chip border-pos/40 text-pos">Player says the code is in place · {new Date(v.code_placed_at).toLocaleString("en-GB")}</p>
+                ? <p className="mt-2 chip border-pos/40 text-pos">Player says the code is in place · {new Date(v.code_placed_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p>
                 : <p className="mt-2 chip border-ink-line text-text-muted">Waiting for the player to place the code</p>)}
               {v.profile_url && <p className="mt-2">Profile link: <a href={v.profile_url} target="_blank" rel="noopener noreferrer nofollow" className="break-all underline">{v.profile_url}</a> <span className="text-xs text-text-muted">(external site: opens in a new tab)</span></p>}
               {v.has_shot && <p className="mt-1"><a href={`/api/admin/verifications/${v.id}/evidence`} target="_blank" rel="noopener noreferrer" className="underline">View private screenshot</a> <span className="text-xs text-text-muted">(access is logged)</span></p>}
@@ -146,7 +147,7 @@ const counts: Record<Tab, number> = { comments: q.comments.length, disputes: q.d
       {tab === "appeals" && <section>
         <h2 className="font-display text-xl font-semibold">Open appeals</h2>
         <div className="mt-4 grid gap-2">{q.appeals.length === 0 ? <Empty title="No open appeals" /> : q.appeals.map((a) => (
-          <Link key={a.id} href={`/admin/reports/${a.report_id}`} className="glass p-4 text-sm hover:shadow-glow">Appeal on {a.public_ref} · {a.status.replace("_", " ")} · {new Date(a.created_at).toLocaleString("en-GB")}</Link>))}</div>
+          <Link key={a.id} href={`/admin/reports/${a.report_id}`} className="glass p-4 text-sm hover:shadow-glow">Appeal on {a.public_ref} · {a.status.replace("_", " ")} · {new Date(a.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</Link>))}</div>
       </section>}
       {tab === "recent" && <section>
         <h2 className="font-display text-xl font-semibold">My recent decisions</h2>

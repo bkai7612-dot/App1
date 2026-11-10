@@ -21,7 +21,8 @@ export default async function AdminHome() {
     (SELECT count(*) FROM report_responses WHERE status = 'pending') AS pending_resp,
     (SELECT count(*) FROM player_comments WHERE status = 'pending') AS pending_comments,
     (SELECT count(*) FROM comment_disputes WHERE status = 'open') AS open_disputes,
-    (SELECT count(*) FROM player_votes) AS votes`));
+    (SELECT count(*) FROM player_votes) AS votes,
+    (SELECT count(*) FROM complaints WHERE status IN ('open','in_progress')) AS complaints`));
   const spikes = await withDb(auth.db, (tx) => tx.q<{ public_id: string; display_name: string; n: string; down: string; young: string }>(
     `SELECT p.public_id, p.display_name, count(*) AS n, count(*) FILTER (WHERE v.value = -1) AS down, count(*) FILTER (WHERE v.counts_from > now()) AS young
      FROM player_votes v JOIN player_profiles p ON p.id = v.player_profile_id
@@ -34,7 +35,7 @@ export default async function AdminHome() {
   // M-10: each counter links to the list behind it.
   const cards: [string, string | undefined, string | undefined][] = [
     ["Reports awaiting review", s?.awaiting, "/admin/reports?f=queue"], ["Disputed / appealed", s?.disputed, "/admin/reports?f=disputed"], ["Open appeals", s?.appeals, "/admin/queue?tab=appeals"], ["Comments awaiting approval", s?.pending_comments, "/admin/queue?tab=comments"],
-    ["Comments reported inaccurate", s?.open_disputes, "/admin/queue?tab=disputes"], ["Commendation comments pending", s?.pending_comm, "/admin/queue?tab=commendations"], ["Ownership claims pending", s?.pending_ver, ver], ["Player responses pending", s?.pending_resp, "/admin/queue?tab=responses"],
+    ["Comments reported inaccurate", s?.open_disputes, "/admin/queue?tab=disputes"], ["Commendation comments pending", s?.pending_comm, "/admin/queue?tab=commendations"], ["Ownership claims pending", s?.pending_ver, ver], ["Player responses pending", s?.pending_resp, "/admin/queue?tab=responses"], ["Open complaints", s?.complaints, can(auth.user.role, "mod.content.remove") ? "/admin/complaints" : undefined],
     ["Registered users", s?.users, users], ["Player profiles", s?.profiles, undefined], ["Commendations", s?.commendations, undefined], ["Report submissions", s?.reports, "/admin/reports?f=all"],
     ["Active subscriptions", subs?.n ?? "—", undefined], ["Community votes", s?.votes, undefined],
   ];

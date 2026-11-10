@@ -17,11 +17,12 @@ export function CookieNotice() {
     document.cookie = `ss_consent=${v}; Path=/; Max-Age=${60 * 60 * 24 * 180}; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`;
     setShow(false);
   };
+  // P-01: a slim bar in the page flow (not floating over content), reached early in the tab order.
   return (
-    <div role="region" aria-label="Cookie notice" className="fixed inset-x-3 bottom-3 z-[70] mx-auto max-w-xl">
-      <div className="glass flex items-center gap-3 p-3 text-xs sm:p-4 sm:text-sm">
-        <p className="text-text-muted">Essential cookies only, no tracking. <Link href="/cookies" className="text-violet-lavender underline">Cookie details</Link></p>
-        <button onClick={() => set("essential")} className="btn-primary shrink-0">OK</button>
+    <div role="region" aria-label="Cookie notice" className="relative z-[2] border-b border-ink-line bg-ink/80 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-1.5 text-xs">
+        <p className="text-text-muted">We use essential cookies only. No tracking or ads. <Link href="/cookies" className="text-violet-lavender underline">Details</Link></p>
+        <button onClick={() => set("essential")} className="btn-ghost ml-auto shrink-0 px-3 py-1 text-xs">OK</button>
       </div>
     </div>
   );

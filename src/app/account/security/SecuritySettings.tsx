@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { securityEventLabel } from "@/lib/security-events";
 import { useEffect, useState } from "react";
 import { KeyRound, Smartphone, LifeBuoy, MonitorSmartphone, AlertTriangle, ShieldCheck } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
@@ -8,7 +9,7 @@ import { useReauth } from "@/components/account/useReauth";
 
 type Passkey = { id: string; nickname: string | null; created_at: string; last_used_at: string | null; backed_up: boolean };
 type Session = { id: string; createdAt: string; lastSeenAt: string; device: string; mfaMethod: string | null; current: boolean };
-const fmt = (s: string) => new Date(s).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+const fmt = (s: string) => new Date(s).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 function Codes({ codes, onDone }: { codes: string[]; onDone: () => void }) {
   return (
@@ -27,7 +28,8 @@ function Codes({ codes, onDone }: { codes: string[]; onDone: () => void }) {
 export function SecuritySettings({ mfaEnabled, hasTotp, codesLeft, passkeys, events }: { mfaEnabled: boolean; hasTotp: boolean; codesLeft: number; passkeys: Passkey[]; events: { type: string; at: string }[] }) {
   const router = useRouter();
   const { run, dialog } = useReauth();
-  const [totp, setTotp] = useState<{ secret: string; qrSvg: string } | null>(null);
+  const [totp, setTotp] = useState<{ secret: string; qrSvg: string; uri: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [code, setCode] = useState("");
   const [codes, setCodes] = useState<string[] | null>(null);
   const [nick, setNick] = useState("");
@@ -38,7 +40,7 @@ export function SecuritySettings({ mfaEnabled, hasTotp, codesLeft, passkeys, eve
   const loadSessions = () => api<{ sessions: Session[] }>("/api/auth/sessions").then((r) => setSessions(r.sessions)).catch(() => {});
   useEffect(() => { loadSessions(); }, []);
 
-  const startTotp = async () => { setErr(null); try { setTotp(await run(() => api<{ secret: string; qrSvg: string }>("/api/auth/mfa/totp"))); } catch (e) { fail(e); } };
+  const startTotp = async () => { setErr(null); try { setTotp(await run(() => api<{ secret: string; qrSvg: string; uri: string }>("/api/auth/mfa/totp"))); } catch (e) { fail(e); } };
   const confirmTotp = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(null);
     try { const r = await run(() => api<{ recoveryCodes: string[] | null }>("/api/auth/mfa/totp", { body: { code } })); setTotp(null); setCode(""); if (r.recoveryCodes) setCodes(r.recoveryCodes); router.refresh(); setMsg("Authenticator app added. Two-factor authentication is on."); }
@@ -94,8 +96,12 @@ export function SecuritySettings({ mfaEnabled, hasTotp, codesLeft, passkeys, eve
               <form onSubmit={confirmTotp} className="mt-3 grid gap-4 sm:grid-cols-[auto_1fr]">
                 <div className="h-40 w-40 rounded-lg bg-white p-2 [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: totp.qrSvg }} aria-label="QR code for authenticator app" />
                 <div className="space-y-3">
-                  <p className="text-sm text-text-muted">Scan with your authenticator app, or enter this key manually:</p>
-                  <code className="block break-all rounded bg-ink/70 px-2 py-1 text-xs">{totp.secret}</code>
+                  <p className="text-sm text-text-muted">Scan with your authenticator app. On this phone? Tap <strong>Open in authenticator app</strong>, or copy the key and paste it in.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <a href={totp.uri} className="btn-primary px-3 py-1.5 text-xs sm:hidden">Open in authenticator app</a>
+                    <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={async () => { try { await navigator.clipboard.writeText(totp.secret); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { /* clipboard blocked: key is selectable below */ } }}>{copied ? "Key copied" : "Copy key"}</button>
+                  </div>
+                  <code className="block select-all break-all rounded bg-ink/70 px-2 py-1 font-mono text-xs tracking-wider">{totp.secret.replace(/(.{4})/g, "$1 ").trim()}</code>
                   <label className="block"><span className="label">Enter the 6-digit code</span><input inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} className="input font-mono" autoComplete="one-time-code" /></label>
                   <button className="btn-primary">Confirm</button>
                 </div>
@@ -129,7 +135,7 @@ export function SecuritySettings({ mfaEnabled, hasTotp, codesLeft, passkeys, eve
       <section className="glass p-6">
         <h2 className="font-display text-lg font-semibold">Recent security activity</h2>
         <ul className="mt-3 divide-y divide-ink-line text-sm">
-          {events.map((e, i) => <li key={i} className="flex justify-between py-2"><span>{e.type.replace(/_/g, " ")}</span><span className="text-text-muted">{fmt(e.at)}</span></li>)}
+          {events.map((e, i) => <li key={i} className="flex justify-between py-2"><span>{securityEventLabel(e.type)}</span><span className="text-text-muted">{fmt(e.at)}</span></li>)}
         </ul>
       </section>
 

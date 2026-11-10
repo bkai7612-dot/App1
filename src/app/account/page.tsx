@@ -14,7 +14,7 @@ export default async function Account() {
   const types = Object.entries(NOTIFICATION_TYPES).map(([k, v]) => ({ key: k, label: v, locked: k === "security", on: k === "security" ? true : u?.notification_prefs?.[k] !== false }));
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <PageHeader title="Account Settings" subtitle={`Member since ${u?.created_at ? new Date(u.created_at).toLocaleDateString("en-GB") : ""}`} />
+      <PageHeader title="Account Settings" subtitle={`Member since ${u?.created_at ? new Date(u.created_at).toLocaleDateString("en-GB", { dateStyle: "medium" }) : ""}`} />
       <AccountNav active="/account" />
       {!auth.user.emailVerified && <div className="mb-6"><Notice tone="warn">Your email address isn&apos;t verified yet.</Notice></div>}
       {!auth.user.mfaEnabled && <div className="mb-6"><Notice tone="warn">Two-factor authentication is required before you can submit feedback or link accounts. <a className="underline" href="/account/security">Set it up</a>.</Notice></div>}

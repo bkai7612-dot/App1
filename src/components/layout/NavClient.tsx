@@ -100,25 +100,28 @@ export function MobileMenu({ links, accountLinks, staff }: { links: L[]; account
   const overlay = open && (
     // Rendered in a portal on <body>: the header's backdrop-filter would otherwise clip a fixed overlay.
     <div ref={panel} className="fixed inset-0 z-[80] bg-ink lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
-      <div className="flex h-16 items-center justify-end px-4">
+      <div className="flex h-16 items-center justify-between px-4">
+        <span className="font-display text-lg font-semibold">Server<span className="text-violet-lavender">Sentry</span></span>
         <button onClick={() => setOpen(false)} className="rounded-lg p-2 text-text-muted hover:bg-white/5" aria-label="Close menu"><X className="h-6 w-6" /></button>
       </div>
       <div className="max-h-[calc(100vh-4rem)] overflow-y-auto px-6 pb-10">
+        <p className="px-4 pb-1 text-xs uppercase tracking-wider text-text-muted">Explore</p>
         <ul className="space-y-1">
           {links.map((l) => (
             <li key={l.href}><Link href={l.href} className={`block rounded-xl px-4 py-3 text-lg ${isActive(path, l.href) ? "bg-violet-brand/15 text-text" : "text-text-muted"}`}>{l.label}</Link></li>
           ))}
         </ul>
         <div className="my-6 h-px bg-ink-line" />
-        {accountLinks ? (
+        {accountLinks ? (<>
+          <p className="px-4 pb-1 text-xs uppercase tracking-wider text-text-muted">My account</p>
           <ul className="space-y-1">
             {accountLinks.map((l) => (
-              <li key={l.href}><Link href={l.href} className="block rounded-xl px-4 py-2.5 text-text-muted">{l.label}</Link></li>
+              <li key={l.href}><Link href={l.href} aria-current={isActive(path, l.href) ? "page" : undefined} className={`block rounded-xl px-4 py-2.5 ${isActive(path, l.href) ? "bg-violet-brand/15 text-text" : "text-text-muted"}`}>{l.label}</Link></li>
             ))}
             {staff && <li><Link href="/admin" className="block rounded-xl px-4 py-2.5 text-violet-lavender">Moderation dashboard</Link></li>}
             <li><button onClick={() => logout(router)} className="block w-full rounded-xl px-4 py-2.5 text-left text-text-muted">Log out</button></li>
           </ul>
-        ) : (
+        </>) : (
           <div className="grid grid-cols-2 gap-3">
             <Link href="/login" className="btn-ghost">Log in</Link>
             <Link href="/register" className="btn-primary">Register</Link>

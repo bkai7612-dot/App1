@@ -24,6 +24,11 @@
 - Report detail rebuilt: claim/release/take over, publication form with live public preview and safety checklist, reason templates, player-facing vs internal fields, internal notes, appeal questions, staff-only signals, evidence thumbnails.
 - Reports list: per-player filter, assignee and claim age, "reply received", relative times. Queues split into tabs with counts, bulk selection, commendation submitter context, "My recent decisions" with undo. Overview counters link to their lists. User records show notes, actions and the user's submissions.
 
+## Package D+E: polish and pre-launch (from the user-testing round)
+- Migration 014: `complaints` table (RLS: own or staff), item references on privacy requests, subscription price and invoice fields.
+- P-01 to P-14 and D5 as listed in TESTING_REPORT.md. L-01 operator details from config plus web complaint form and "complain about this decision" links; L-02 complete export; L-03 age policy (Terms and COMPLIANCE §6a, flagged for legal review); L-04 item-linked privacy requests and an erasure explanation; L-05 demo data (console titles, fixed contradictory text, no "most popular" claim); L-06 subscription transparency.
+- Stripe invoice links and stored prices only appear after live webhooks deliver them. **Not tested against live Stripe.**
+
 ## Outstanding
 - Live verification of Stripe, Steam, Supabase Storage, Resend and passkeys on the production domain.
 - Additional platform integrations (Riot RSO, Xbox) subject to approval.

@@ -31,13 +31,16 @@ async function upsertSubscription(tx: Tx, sub: Sub, eventCreated: number) {
   // Same-second events: Stripe timestamps have 1s resolution. A terminal state is never overwritten by a same-second non-terminal one.
   if (prev && prev.last_event_at.getTime() === at.getTime() && ["canceled", "incomplete_expired"].includes(prev.status) && !["canceled", "incomplete_expired"].includes(sub.status)) return;
   await tx.q(
-    `INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, price_id, current_period_end, cancel_at_period_end, canceled_at, last_event_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, price_id, current_period_end, cancel_at_period_end, canceled_at, last_event_at, amount_pence, currency, billing_interval)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (stripe_subscription_id) DO UPDATE SET status = EXCLUDED.status, price_id = EXCLUDED.price_id,
        current_period_end = EXCLUDED.current_period_end, cancel_at_period_end = EXCLUDED.cancel_at_period_end,
-       canceled_at = EXCLUDED.canceled_at, last_event_at = EXCLUDED.last_event_at`,
+       canceled_at = EXCLUDED.canceled_at, last_event_at = EXCLUDED.last_event_at,
+       amount_pence = coalesce(EXCLUDED.amount_pence, subscriptions.amount_pence), currency = coalesce(EXCLUDED.currency, subscriptions.currency),
+       billing_interval = coalesce(EXCLUDED.billing_interval, subscriptions.billing_interval)`,
     [userId, sub.id, customerId, sub.status, sub.items?.data?.[0]?.price?.id ?? null, periodEnd(sub), !!sub.cancel_at_period_end,
-     sub.canceled_at ? new Date(sub.canceled_at * 1000) : null, at]);
+     sub.canceled_at ? new Date(sub.canceled_at * 1000) : null, at,
+     sub.items?.data?.[0]?.price?.unit_amount ?? null, sub.items?.data?.[0]?.price?.currency ?? null, sub.items?.data?.[0]?.price?.recurring?.interval ?? null]);
   if (!prev || prev.status !== sub.status) {
     await audit(tx, null, "billing.subscription_status", { type: "user", id: userId }, { from: prev?.status ?? null, to: sub.status, subscription: sub.id });
     const label: Record<string, string> = { active: "ServerSentry Plus is active", past_due: "Payment failed — Plus paused until payment succeeds", canceled: "Your Plus subscription has ended", unpaid: "Plus paused due to unpaid invoice", trialing: "Your Plus trial started" };
@@ -70,9 +73,11 @@ export async function processStripeEvent(event: Stripe.Event): Promise<boolean> 
         const userId = await userByCustomer(tx, custId(inv.customer as string));
         if (!userId) break;
         const status = event.type === "invoice.paid" ? "paid" : "failed";
-        await tx.q(`INSERT INTO payments (user_id, stripe_invoice_id, amount_pence, currency, status) VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (stripe_invoice_id) DO UPDATE SET status = CASE WHEN payments.status IN ('refunded','partially_refunded') THEN payments.status ELSE EXCLUDED.status END`,
-          [userId, inv.id, status === "paid" ? inv.amount_paid : inv.amount_due, inv.currency, status]);
+        const url = typeof inv.hosted_invoice_url === "string" && /^https:\/\/(invoice|pay)\.stripe\.com\/[A-Za-z0-9/_?=&%.-]+$/.test(inv.hosted_invoice_url) ? inv.hosted_invoice_url : null;
+        await tx.q(`INSERT INTO payments (user_id, stripe_invoice_id, amount_pence, currency, status, invoice_number, invoice_url, period_end) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    ON CONFLICT (stripe_invoice_id) DO UPDATE SET status = CASE WHEN payments.status IN ('refunded','partially_refunded') THEN payments.status ELSE EXCLUDED.status END,
+                      invoice_number = coalesce(EXCLUDED.invoice_number, payments.invoice_number), invoice_url = coalesce(EXCLUDED.invoice_url, payments.invoice_url)`,
+          [userId, inv.id, status === "paid" ? inv.amount_paid : inv.amount_due, inv.currency, status, (inv.number ?? "").slice(0, 64) || null, url, inv.period_end ? new Date(inv.period_end * 1000) : null]);
         if (status === "failed") await notify(tx, userId, "subscription_changed", "Your Plus payment failed", "Update your payment method to keep Plus.", "/me/subscription");
         break;
       }

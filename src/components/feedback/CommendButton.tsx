@@ -7,7 +7,7 @@ import { COMMENDATION_LABELS } from "@/lib/categories";
 import { Modal } from "@/components/ui/Modal";
 import { GateError } from "./MfaGateMessage";
 
-export function CommendButton({ profileId, signedIn, plus = false }: { profileId: string; signedIn: boolean; plus?: boolean }) {
+export function CommendButton({ profileId, signedIn, plus = false, nextAllowedAt = null }: { profileId: string; signedIn: boolean; plus?: boolean; nextAllowedAt?: string | null }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState("excellent_teammate");
   const [comment, setComment] = useState("");
@@ -23,6 +23,8 @@ export function CommendButton({ profileId, signedIn, plus = false }: { profileId
       router.refresh();
     } catch (e) { setErr(e); } finally { setBusy(false); }
   };
+  if (nextAllowedAt && new Date(nextAllowedAt) > new Date() && !done)
+    return <span className="btn-ghost cursor-default text-pos" title="You can commend each player once every 24 hours, so one person can't inflate a reputation."><Check className="h-4 w-4" /> Commended · again from {new Date(nextAllowedAt).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>;
   if (!signedIn) return <a href="/login" className="btn-positive"><ThumbsUp className="h-4 w-4" /> Give Commendation</a>;
   return (
     <>
@@ -47,6 +49,7 @@ export function CommendButton({ profileId, signedIn, plus = false }: { profileId
               <textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={3} className="input" placeholder="Great shot-calling and kept the team positive." />
               <span className="mt-1 block text-xs text-text-muted">{comment.length}/500 · Comments are checked by a moderator. Don&apos;t include personal information.</span>
             </label> : <p className="text-xs text-text-muted">Want to add a written comment? That&apos;s a ServerSentry Plus feature.</p>}
+            <p className="text-xs text-text-muted">You can commend each player once every 24 hours.</p>
             <GateError error={err} />
             <button type="submit" disabled={busy} className="btn-positive w-full">{busy ? <span className="spinner" /> : <ThumbsUp className="h-4 w-4" />} Submit commendation</button>
           </form>

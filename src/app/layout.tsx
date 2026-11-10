@@ -26,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en-GB" className={`${sans.variable} ${display.variable}`}>
       <body className="min-h-screen font-sans">
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-violet-brand focus:px-4 focus:py-2">Skip to content</a>
+        <CookieNotice />
         <PageWaves />
         <div className="relative z-[1]">
           <PrelaunchBanner />
@@ -33,7 +34,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main id="main" className="relative">{children}</main>
           <Footer />
         </div>
-        <CookieNotice />
         <InstallApp />
       </body>
     </html>

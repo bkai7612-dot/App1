@@ -742,6 +742,40 @@ section("QA round 1 regressions");
   check("L9 r2: zero-width characters rejected in display names", zw.status === 400);
 }
 
+section("Polish and pre-launch: complaints, export, privacy items, pages");
+{
+  const guest = client();
+  check("L-01: complaint needs an email when signed out", (await guest.post("/api/complaints", { category: "other", body: "Something about the site that needs a look please." })).status === 400);
+  const gc = await guest.post("/api/complaints", { category: "illegal_content", targetRef: `/players/${shadow.public_id}`, body: "This profile's comments include someone's home address.", contactEmail: "complainant@test.invalid" });
+  check("L-01: signed-out complaint accepted with a reference", gc.status === 200 && /^C-[0-9A-F]{8}$/.test(gc.json?.ref ?? ""), gc.text);
+  check("L-01: complaint validation (min length)", (await A.c.post("/api/complaints", { category: "other", body: "short" })).status === 400);
+  const mc = await A.c.post("/api/complaints", { category: "moderation_decision", targetRef: "R-00000000", body: "I disagree with the rejection of my report; here is more context." });
+  check("L-01: member complaint accepted", mc.status === 200);
+  const cid = (await db.query(`SELECT id FROM complaints WHERE public_ref = $1`, [mc.json?.ref])).rows[0]?.id;
+  check("L-01: members can't decide complaints", (await A.c.post(`/api/admin/complaints/${cid}`, { decision: "upheld", note: "Upholding my own complaint." })).status === 403);
+  check("L-01: junior moderators can't decide complaints", (await M.c.post(`/api/admin/complaints/${cid}`, { decision: "upheld", note: "Looks fair to me." })).status === 403);
+  const app = new pg.Client({ connectionString: process.env.DATABASE_URL }); await app.connect();
+  await app.query("BEGIN"); await app.query(`SELECT set_config('search_path','ss, public',true), set_config('app.user_id',$1,true), set_config('app.role','user',true)`, [B.id]);
+  const peek = await app.query(`SELECT count(*)::int AS n FROM complaints`); await app.query("ROLLBACK"); await app.end();
+  check("L-01: DB: members can't read other people's complaints", peek.rows[0].n === 0);
+  check("L-01: complaints page renders", (await guest.get("/complaints")).status === 200);
+  const pr = await A.c.post("/api/account/privacy-request", { kind: "rectification", details: "This report about me has the wrong date on it.", targetType: "report_about_me", targetRef: "R-12345678" });
+  check("L-04: privacy request can point at a specific item", pr.status === 200 && (await db.query(`SELECT target_type FROM data_subject_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`, [A.id])).rows[0]?.target_type === "report_about_me");
+  check("L-04: unknown item type rejected", (await A.c.post("/api/account/privacy-request", { kind: "erasure", details: "Delete the thing please.", targetType: "evidence" })).status === 400);
+  await db.query(`DELETE FROM rate_limits WHERE bucket LIKE 'export%'`);
+  const ex = await C.c.get("/api/account/export");
+  const ej = ex.status === 200 ? JSON.parse(ex.text) : {};
+  check("L-02: export includes sign-in methods, sessions, verifications and reports about me", ex.status === 200 && !!ej.sign_in_methods && Array.isArray(ej.sessions) && Array.isArray(ej.verifications) && Array.isArray(ej.reports_about_my_profiles) && ej.reports_about_my_profiles.length >= 1, ex.text.slice(0, 200));
+  check("L-02: export uses names, not internal IDs", ej.reports_about_my_profiles?.[0]?.player && !("player_profile_id" in (ej.reports_about_my_profiles?.[0] ?? {})));
+  check("L-02: export never reveals who reported you or their wording", !ex.text.includes(A.id) && !ex.text.includes("Spammed taunts at every opponent"));
+  check("L-02: export never includes secrets", !/password_hash|secret_enc|code_hash|token_hash|public_key/.test(ex.text));
+  const bad = await guest.get("/reset-password?token=not-a-real-token-value");
+  check("P-11: invalid reset link explained up front", bad.status === 200 && /isn.t valid/.test(bad.text));
+  check("D5: profile shows the Plus panel with live counts", /What Plus shows on this profile/.test((await B.c.get(`/players/${shadow.public_id}?tab=comments`)).text));
+  check("Notifications page renders with player context", (await C.c.get("/me/notifications")).status === 200);
+  check("Subscription page renders", (await B.c.get("/me/subscription")).status === 200);
+}
+
 section("Session management");
 {
   const second = client();

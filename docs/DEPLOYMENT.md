@@ -37,6 +37,7 @@
    | `STORAGE_DRIVER=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_EVIDENCE_BUCKET` | |
    | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PLUS_MONTHLY` | see [STRIPE.md](STRIPE.md) |
    | `RESEND_API_KEY`, `EMAIL_FROM` | verified sending domain (SPF/DKIM/DMARC) |
+   | `OPERATOR_LEGAL_NAME`, `OPERATOR_COMPANY_NUMBER`, `OPERATOR_ADDRESS`, `CONTACT_EMAIL`, `PRIVACY_EMAIL`, `COMPLAINTS_EMAIL`, `ICO_REGISTRATION_NUMBER` | Public legal details shown on Terms, Privacy and Complaints. Pages say "(not yet configured)" until set: **required before launch** |
    | `CRON_SECRET` | random; Vercel Cron sends it as a Bearer token |
    | `STEAM_WEB_API_KEY` | optional |
 

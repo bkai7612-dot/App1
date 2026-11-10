@@ -11,7 +11,7 @@ type Opt = { slug: string; name: string; identifier_label?: string };
 export function NewPlayerForm({ games, platforms, initial }: { games: Opt[]; platforms: Opt[]; initial: { name: string; game: string; platform: string } }) {
   const [name, setName] = useState(initial.name);
   const [game, setGame] = useState(initial.game || "");
-  const [platform, setPlatform] = useState(initial.platform || platforms[0]?.slug);
+  const [platform, setPlatform] = useState(initial.platform || "");
   const [pid, setPid] = useState("");
   const [existing, setExisting] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export function NewPlayerForm({ games, platforms, initial }: { games: Opt[]; pla
         body: { displayName: name, gameSlug: game, platformSlug: platform, platformUserId: pid || null, confirmDistinct },
       });
       if (r.needsConfirmation) { setExisting(r.existing ?? []); return; }
-      router.push(`/players/${r.publicId}`);
+      router.push(`/players/${r.publicId}?created=1`);
     } catch (e) { setErr(e); } finally { setBusy(false); }
   };
   const label = platforms.find((p) => p.slug === platform)?.identifier_label ?? "Username";
@@ -33,7 +33,7 @@ export function NewPlayerForm({ games, platforms, initial }: { games: Opt[]; pla
       <label className="block"><span className="label">{label}</span><input required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} className="input" /></label>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block"><span className="label">Game</span><GameInput games={games} value={game} onChange={setGame} /></label>
-        <label className="block"><span className="label">Platform</span><select value={platform} onChange={(e) => setPlatform(e.target.value)} className="input">{platforms.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></label>
+        <label className="block"><span className="label">Platform</span><select value={platform} onChange={(e) => setPlatform(e.target.value)} required className="input"><option value="" disabled>Choose a platform…</option>{platforms.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></label>
       </div>
       <label className="block"><span className="label">Platform ID (optional)</span><input maxLength={128} value={pid} onChange={(e) => setPid(e.target.value)} className="input" placeholder="e.g. SteamID64 or Riot ID tag" />
         <span className="mt-1 block text-xs text-text-muted">Only enter publicly visible identifiers. Never enter personal information such as real names, addresses or phone numbers.</span></label>

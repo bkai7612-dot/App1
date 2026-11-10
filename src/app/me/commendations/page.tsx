@@ -19,7 +19,7 @@ export default async function MyCommendations() {
   const tone: Record<string, string> = { approved: "border-pos/40 text-pos", pending: "border-sky-400/40 text-sky-300", rejected: "border-ink-line text-text-muted", removed: "border-ink-line text-text-muted" };
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-      <PageHeader title="My Commendations" subtitle="Recognition you've given to other players." />
+      <PageHeader title="My Commendations &amp; Comments" subtitle="Recognition you've given, and comments you've written." />
       <MeNav active="/me/commendations" />
       {comments.length > 0 && (
         <section className="mb-8">
@@ -28,7 +28,7 @@ export default async function MyCommendations() {
             <div key={c.id} className="glass p-4 text-sm">
               <div className="flex flex-wrap items-center gap-2"><span className={`chip ${tone[c.status] ?? "border-ink-line text-text-muted"}`}>{c.status === "pending" ? "awaiting moderation" : c.status}</span>
                 <span>on <Link className="underline" href={`/players/${c.public_id}?tab=comments`}>{c.player}</Link></span>
-                <span className="ml-auto text-xs text-text-muted">{new Date(c.created_at).toLocaleDateString("en-GB")}</span></div>
+                <span className="ml-auto text-xs text-text-muted">{new Date(c.created_at).toLocaleDateString("en-GB", { dateStyle: "medium" })}</span></div>
               <p className="mt-2 whitespace-pre-wrap break-words text-text-muted">{c.body}</p>
               {c.moderation_note && c.status !== "approved" && <p className="mt-2 text-xs text-text-muted">Moderator note: {c.moderation_note}</p>}
             </div>))}</div>
@@ -40,7 +40,7 @@ export default async function MyCommendations() {
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className={`chip ${tone[c.status]}`}>{c.status}</span>
               <span>{COMMENDATION_LABELS[c.category]} for <Link className="underline" href={`/players/${c.public_id}`}>{c.player}</Link></span>
-              <span className="ml-auto text-xs text-text-muted">{new Date(c.created_at).toLocaleDateString("en-GB")}</span>
+              <span className="ml-auto text-xs text-text-muted">{new Date(c.created_at).toLocaleDateString("en-GB", { dateStyle: "medium" })}</span>
             </div>
             {c.comment && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-text-muted">{c.comment}</p>}
           </div>

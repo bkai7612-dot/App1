@@ -41,7 +41,7 @@ export default async function AdminReports({ searchParams }: { searchParams: Pro
             {r.info_replied_at ? <span className="chip border-emerald-400/40 text-emerald-300">Reply received</span> : r.info_requested_at && <span className="chip border-sky-400/40 text-sky-300">Info requested</span>}
             {r.assignee && <span className="chip border-violet-brand/40 text-violet-lavender">{r.assignee}{r.assigned_at ? ` · ${ago(r.assigned_at)}` : ""}</span>}
             {r.flags.map((fl) => <span key={fl} className="chip border-amber-400/40 text-amber-300">{fl.replace(/_/g, " ")}</span>)}
-            <span className="ml-auto text-xs text-text-muted">{r.evidence} file(s) · <span title={new Date(r.created_at).toLocaleString("en-GB")}>{ago(r.created_at)}</span></span>
+            <span className="ml-auto text-xs text-text-muted">{r.evidence} file(s) · <span title={new Date(r.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}>{ago(r.created_at)}</span></span>
           </Link>
         ))}
       </div>

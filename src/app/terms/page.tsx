@@ -1,3 +1,4 @@
+import { OPERATOR, NOT_SET } from "@/lib/operator";
 import type { Metadata } from "next";
 import { Prose } from "@/components/ui/Prose";
 
@@ -6,8 +7,8 @@ export const metadata: Metadata = { title: "Terms of Use" };
 export default function Terms() {
   return (
     <Prose title="Terms of Use" intro="Last updated: draft." draft>
-      <h2>1. About us</h2><p>ServerSentry is operated by [OPERATOR LEGAL NAME, company number, registered address]. Contact: [CONTACT EMAIL].</p>
-      <h2>2. Eligibility</h2><p>You must be 18 or over to create an account. One account per person.</p>
+      <h2>1. About us</h2><p>ServerSentry is operated by {OPERATOR.name ?? NOT_SET}{OPERATOR.companyNumber ? `, company number ${OPERATOR.companyNumber}` : ""}, {OPERATOR.address ?? NOT_SET}. Contact: {OPERATOR.contactEmail ?? NOT_SET}.</p>
+      <h2>2. Eligibility and age</h2><p>You must be 18 or over to create an account. One account per person. Under-18s can&apos;t submit reports, commendations, votes or comments. Players of any age can be <em>reported about</em>, because a username doesn&apos;t reveal age. If you think content is about a child, tell us with the <a href="/complaints">complaint form</a> and we&apos;ll review it with extra care, and remove it if showing it isn&apos;t appropriate. A parent or guardian can ask on a child&apos;s behalf. [Age-assurance approach and the handling of content about children: subject to legal review.]</p>
       <h2>3. Your account and security</h2><p>Keep your credentials and second factors secure. Two-factor authentication is mandatory before you can contribute content. Tell us immediately if you suspect your account is compromised.</p>
       <h2>4. User content</h2><p>You are responsible for content you submit. You grant us a licence to host, moderate, summarise and display it as described in these terms. Published reports are moderator-written summaries of community allegations. They are not statements of fact by ServerSentry.</p>
       <h2>5. Moderation</h2><p>We may refuse, edit (by summarising), remove or restrict content and accounts in line with the Community Guidelines. Affected players have a right of reply and appeal.</p>

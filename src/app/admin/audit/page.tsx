@@ -21,7 +21,7 @@ export default async function Audit({ searchParams }: { searchParams: Promise<{ 
         <table className="w-full text-left text-xs">
           <thead className="uppercase tracking-wider text-text-muted"><tr><th className="p-3">#</th><th className="p-3">Time</th><th className="p-3">Actor</th><th className="p-3">Action</th><th className="p-3">Target</th><th className="p-3">Detail</th></tr></thead>
           <tbody className="divide-y divide-ink-line">{rows.map((r) => (
-            <tr key={r.id}><td className="p-3 font-mono">{r.id}</td><td className="p-3 whitespace-nowrap">{new Date(r.created_at).toLocaleString("en-GB")}</td><td className="p-3">{r.actor ?? "system"} <span className="text-text-muted">({r.actor_role})</span></td>
+            <tr key={r.id}><td className="p-3 font-mono">{r.id}</td><td className="p-3 whitespace-nowrap">{new Date(r.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</td><td className="p-3">{r.actor ?? "system"} <span className="text-text-muted">({r.actor_role})</span></td>
               <td className="p-3 font-mono">{r.action}</td><td className="p-3 font-mono">{r.target_type}:{r.target_id?.slice(0, 8)}</td><td className="max-w-xs truncate p-3 font-mono text-text-muted">{JSON.stringify(r.detail)}</td></tr>))}</tbody>
         </table>
       </div>

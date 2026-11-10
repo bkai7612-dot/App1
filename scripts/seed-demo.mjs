@@ -26,6 +26,9 @@ for (let i = 1; i <= 8; i++) {
 }
 const r6 = await id("games", "rainbow-six-siege"), lol = await id("games", "league-of-legends"), cs2 = await id("games", "counter-strike-2"), val = await id("games", "valorant"), mc = await id("games", "minecraft");
 const ubi = await id("platforms", "ubisoft-connect"), steam = await id("platforms", "steam"), riot = await id("platforms", "riot-games"), xbox = await id("platforms", "xbox");
+// L-05: console and other popular titles, so the demo isn't PC-only.
+const fn = await id("games", "fortnite"), bo6 = await id("games", "call-of-duty-black-ops-6"), fc = await id("games", "ea-sports-fc-26"), apex = await id("games", "apex-legends");
+const psn = await id("platforms", "playstation-network"), epic = await id("platforms", "epic-games"), ea = await id("platforms", "ea-app");
 
 async function profile(name, game, platform, opts = {}) {
   const r = await c.query(`INSERT INTO player_profiles (public_id, display_name, display_name_normalized, game_id, platform_id, platform_user_id, is_demo, created_at, last_active_at)
@@ -82,13 +85,22 @@ await commend(nova, val, riot, 7);
 const aurora = await profile("AuroraBuilds", mc, xbox, { activeDaysAgo: 5 });
 await commend(aurora, mc, xbox, 3);
 await profile("Kestrel", lol, riot, { activeDaysAgo: 8 });
+const pixel = await profile("PixelRanger", fn, epic, { activeDaysAgo: 2 });
+await commend(pixel, fn, epic, 5);
+const ghost = await profile("GhostlyAim", bo6, psn, { activeDaysAgo: 1 });
+await commend(ghost, bo6, psn, 3);
+await report(ghost, bo6, psn, ["unsportsmanlike_conduct", "published", "A community member alleges repeated taunting of opponents after each elimination in public matches.", null, null], 1);
+const volley = await profile("VolleyKing", fc, psn, { activeDaysAgo: 4 });
+await commend(volley, fc, psn, 6);
+const drift = await profile("DriftWraith", apex, ea, { activeDaysAgo: 6 });
+await commend(drift, apex, ea, 2);
 
 // Community votes (free members) and moderator-approved comments (Plus members).
 async function votes(p, up, down) {
   for (let i = 0; i < up + down; i++) await c.query(`INSERT INTO player_votes (voter_user_id, player_profile_id, value, is_demo) VALUES ($1, $2, $3, true)`, [users[i % users.length], p.id, i < up ? 1 : -1]);
 }
 // Only 8 demo voters exist, so each profile can get at most 8 votes.
-await votes(shadow, 5, 3); await votes(shadow2, 4, 0); await votes(nova, 6, 1); await votes(aurora, 3, 0);
+await votes(shadow, 5, 3); await votes(shadow2, 4, 0); await votes(nova, 6, 1); await votes(aurora, 3, 0); await votes(ghost, 3, 2); await votes(volley, 5, 0);
 const PLAYER_COMMENTS = [
   [shadow, "positive", "Solid anchor on defence and always shares intel. Queued with him five times this season and every game was positive.", 6],
   [shadow, "negative", "Got very heated in voice chat after we lost the first two rounds. Calmed down later but it wasn't fun.", 14],
@@ -99,7 +111,7 @@ for (const [p, tone, body, days] of PLAYER_COMMENTS) {
   await c.query(`INSERT INTO player_comments (player_profile_id, author_user_id, tone, body, status, is_demo, created_at, moderated_at)
     VALUES ($1, $2, $3, $4, 'approved', true, now() - ($5 || ' days')::interval, now() - ($5 || ' days')::interval)`, [p.id, users[days % users.length], tone, body, String(days)]);
 }
-await c.query(`INSERT INTO player_comments (player_profile_id, author_user_id, tone, body, status, is_demo) VALUES ($1, $2, 'negative', 'Demo comment awaiting moderation: kept spamming the same voice line all match.', 'pending', true)`, [shadow.id, users[5]]);
+await c.query(`INSERT INTO player_comments (player_profile_id, author_user_id, tone, body, status, is_demo) VALUES ($1, $2, 'negative', 'Kept spamming the same voice line all match, even after the team asked them to stop.', 'pending', true)`, [shadow.id, users[5]]);
 
 await c.query("COMMIT");
 await c.end();
