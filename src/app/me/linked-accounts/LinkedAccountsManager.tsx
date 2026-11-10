@@ -10,7 +10,7 @@ import { QrHandoff } from "@/components/feedback/QrHandoff";
 
 type Profile = { id: string; public_id: string; display_name: string; game: string; platform: string };
 type Option = { method: string; label: string; detail: string; automatic: boolean };
-type Account = { id: string; player_profile_id: string; username: string; platform: string; platform_slug: string; verification_status: string; verification_method: string | null; options: Option[]; pendingCode: string | null; pending: boolean };
+type Account = { id: string; player_profile_id: string; username: string; platform: string; platform_slug: string; verification_status: string; verification_method: string | null; options: Option[]; pendingCode: string | null; pending: boolean; pendingId: string | null; pendingMethod: string | null };
 
 export function VerifyOptions({ options, onPick, busy, target }: { options: Option[]; onPick: (m: string) => void; busy: boolean; target?: { gamingAccountId?: string; playerProfileId?: string } }) {
   const [qrFor, setQrFor] = useState<Option | null>(null);
@@ -87,7 +87,7 @@ export function LinkedAccountsManager({ profiles, platforms, accounts }: { profi
                     <span className="font-medium">{a.username}</span>
                     <span className="text-sm text-text-muted">{a.platform}</span>
                     <IdentityBadge status={a.verification_status} />
-                    {a.pending && !code && <span className="chip border-sky-400/40 text-sky-300">Review pending</span>}
+                    {a.pending && !code && <span className="chip border-sky-400/40 text-sky-300">{a.pendingMethod === "manual_review" ? "Moderator review pending" : "Verification in progress"}</span>}
                     <span className="ml-auto flex gap-2">
                       {a.verification_status !== "verified" && !code && !a.pending && (
                         <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => setOpenFor(openFor === a.id ? null : a.id)}>Verify this account</button>
@@ -97,6 +97,13 @@ export function LinkedAccountsManager({ profiles, platforms, accounts }: { profi
                   </div>
                   {openFor === a.id && <VerifyOptions options={a.options} busy={busy} onPick={(m) => verify(a, m)} target={{ gamingAccountId: a.id }} />}
                   {code && a.verification_status !== "verified" && <CodeInstructions code={code} platform={a.platform} />}
+                  {a.pending && a.pendingId && a.verification_status !== "verified" && (
+                    <button className="btn-ghost mt-3 px-3 py-1.5 text-xs" disabled={busy} onClick={async () => {
+                      setErr(null); setBusy(true);
+                      try { await api(`/api/identity/verifications/${a.pendingId}/cancel`, { body: {} }); setCodes((c) => { const n = { ...c }; delete n[a.id]; return n; }); setOpenFor(a.id); router.refresh(); }
+                      catch (e) { setErr(e); } finally { setBusy(false); }
+                    }}>Cancel and try another way</button>
+                  )}
                 </li>
               );
             })}

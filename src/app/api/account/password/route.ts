@@ -1,16 +1,18 @@
 import { z } from "zod";
 import { route } from "@/lib/server/api";
 import { withDb, SYSTEM } from "@/lib/db";
-import { hashPassword, passwordProblems } from "@/lib/auth/password";
+import { hashPassword, passwordProblems, verifyPassword } from "@/lib/auth/password";
 import { revokeAllSessions } from "@/lib/auth/session";
 import { securityEvent, audit } from "@/lib/server/audit";
 import { securityNotice } from "@/lib/auth/flows";
 import { badRequest } from "@/lib/server/errors";
 
-const Body = z.object({ newPassword: z.string().min(1).max(128) }).strict();
+const Body = z.object({ currentPassword: z.string().min(1).max(128), newPassword: z.string().min(1).max(128) }).strict();
 
 /** Change password: requires fresh re-auth (password + MFA). Signs out all OTHER sessions. */
 export const POST = route({ auth: "auth", reauth: true, body: Body }, async ({ auth, body, meta }) => {
+  const cur = await withDb(SYSTEM, (tx) => tx.one<{ password_hash: string }>(`SELECT password_hash FROM users WHERE id = $1`, [auth!.user.id]));
+  if (!cur || !(await verifyPassword(cur.password_hash, body.currentPassword))) throw badRequest("Your current password is incorrect.");
   const problem = passwordProblems(body.newPassword, [auth!.user.email.split("@")[0], auth!.user.displayName]);
   if (problem) throw badRequest(problem);
   const hash = await hashPassword(body.newPassword);

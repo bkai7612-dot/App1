@@ -41,7 +41,7 @@ export function SecuritySettings({ mfaEnabled, hasTotp, codesLeft, passkeys, eve
   const startTotp = async () => { setErr(null); try { setTotp(await run(() => api<{ secret: string; qrSvg: string }>("/api/auth/mfa/totp"))); } catch (e) { fail(e); } };
   const confirmTotp = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(null);
-    try { const r = await run(() => api<{ recoveryCodes: string[] | null }>("/api/auth/mfa/totp", { body: { code } })); setTotp(null); setCode(""); if (r.recoveryCodes) setCodes(r.recoveryCodes); else router.refresh(); setMsg("Authenticator app added."); }
+    try { const r = await run(() => api<{ recoveryCodes: string[] | null }>("/api/auth/mfa/totp", { body: { code } })); setTotp(null); setCode(""); if (r.recoveryCodes) setCodes(r.recoveryCodes); router.refresh(); setMsg("Authenticator app added. Two-factor authentication is on."); }
     catch (e) { fail(e); }
   };
   const addPasskey = async () => {
@@ -50,7 +50,7 @@ export function SecuritySettings({ mfaEnabled, hasTotp, codesLeft, passkeys, eve
       const opts = await run(() => api<Parameters<typeof startRegistration>[0]["optionsJSON"]>("/api/auth/mfa/passkey/register-options", { body: {} }));
       const response = await startRegistration({ optionsJSON: opts });
       const r = await run(() => api<{ recoveryCodes: string[] | null }>("/api/auth/mfa/passkey/register-verify", { body: { response, nickname: nick || undefined } }));
-      setNick(""); if (r.recoveryCodes) setCodes(r.recoveryCodes); else router.refresh();
+      setNick(""); if (r.recoveryCodes) setCodes(r.recoveryCodes); router.refresh();
       setMsg("Passkey added.");
     } catch (e) { fail(e); }
   };

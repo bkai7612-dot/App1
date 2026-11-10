@@ -4,7 +4,18 @@ import { NextResponse, type NextRequest } from "next/server";
  * Network-boundary proxy: per-request CSP nonce. (Auth/authorisation is enforced in route
  * handlers and server components, never solely here.)
  */
+let appUrlChecked = false;
+
 export function proxy(request: NextRequest) {
+  if (!appUrlChecked) {
+    appUrlChecked = true;
+    const configured = process.env.APP_URL;
+    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    try {
+      if (configured && host && new URL(configured).host !== host)
+        console.warn(`[config] APP_URL (${configured}) does not match the host being served (${host}). Sign-in callbacks (Steam, Discord, Battle.net) and passkeys will fail. Set APP_URL to the public address.`);
+    } catch { console.warn("[config] APP_URL is not a valid URL"); }
+  }
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDev = process.env.NODE_ENV === "development";
   const csp = [

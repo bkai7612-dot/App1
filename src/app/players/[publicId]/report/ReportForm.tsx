@@ -24,12 +24,14 @@ export function ReportForm({ profileId, publicId }: { profileId: string; publicI
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new ClientApiError(res.status, data?.error?.code ?? "ERROR", data?.error?.message ?? "Could not submit report.");
       setDone(data.ref);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => document.getElementById("report-done")?.focus(), 50);
     } catch (e) { setErr(e); } finally { setBusy(false); }
   };
   if (done) return (
     <div className="glass p-8 text-center">
       <ShieldCheck className="mx-auto h-10 w-10 text-violet-lavender" />
-      <h2 className="mt-3 font-display text-xl font-semibold">Report submitted</h2>
+      <h2 id="report-done" tabIndex={-1} className="mt-3 font-display text-xl font-semibold" role="status">Report submitted</h2>
       <p className="mt-2 text-sm text-text-muted">Reference <span className="font-mono">{done}</span>. A moderator will review it. You can follow its status in <Link className="underline" href="/me/reports">My Reports</Link>.</p>
       <Link href={`/players/${publicId}`} className="btn-ghost mt-5">Back to profile</Link>
     </div>

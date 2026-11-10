@@ -467,6 +467,19 @@ section("Account verification: code check, QR phone handoff, official sign-in ro
   check("Forged Discord callback without session goes nowhere", forged.status === 307 && /\/login/.test(forged.headers.get("location") ?? ""));
   const forged2 = await C.c.get(`/api/identity/battlenet/callback?state=forged-state-value&code=abc`);
   check("Forged Battle.net callback rejected", forged2.status === 307 && /battlenet=invalid/.test(forged2.headers.get("location") ?? ""));
+  // I-01 regression: an abandoned QR/sign-in must not lock out other methods.
+  const unownedSteam = (await db.query(`SELECT p.id FROM player_profiles p JOIN platforms pl ON pl.id = p.platform_id WHERE p.owner_user_id IS NULL AND pl.slug = 'steam' AND p.deleted_at IS NULL LIMIT 1`)).rows[0];
+  const h1 = await B.c.post("/api/identity/handoff", { playerProfileId: unownedSteam.id, method: "steam" });
+  check("I-01: QR handoff for a claim starts", h1.status === 200);
+  const afterQr = await B.c.post("/api/identity/claim", { playerProfileId: unownedSteam.id, method: "code" });
+  check("I-01: switching to the code check after an abandoned QR works (no 'already exists')", afterQr.status === 200 && !!afterQr.json?.code, afterQr.text);
+  const pendRow = (await db.query(`SELECT id FROM account_verifications WHERE user_id = $1 AND player_profile_id = $2 AND status = 'pending'`, [B.id, unownedSteam.id])).rows;
+  check("I-01: only one pending attempt remains", pendRow.length === 1);
+  check("I-01: another user cannot cancel it", (await A.c.post(`/api/identity/verifications/${pendRow[0].id}/cancel`, {})).status === 404);
+  check("I-01: owner can cancel a pending attempt", (await B.c.post(`/api/identity/verifications/${pendRow[0].id}/cancel`, {})).status === 200);
+  const xb = await C.c.post("/api/identity/accounts", { playerProfileId: ownedProfile.id, platformSlug: "xbox", username: `XB_${RUN}` });
+  const xbCode = await C.c.post(`/api/identity/accounts/${xb.json.id}/verify`, { method: "code" });
+  check("I-01: a second account on the same profile can be verified while another is pending", xbCode.status === 200 && !!xbCode.json?.code, xbCode.text);
   const bn = await B.c.get("/api/identity/handoff/00000000-0000-0000-0000-000000000000");
   check("Unknown handoff id returns 404", bn.status === 404);
   const app = new pg.Client({ connectionString: process.env.DATABASE_URL }); await app.connect();
@@ -558,7 +571,7 @@ section("Rate limiting");
 {
   const g = client("10.99.99.99");
   let limited = false;
-  for (let i = 0; i < 25; i++) { const r = await g.post("/api/auth/login", { email: `x${i}@y.z`, password: "whatever-password" }); if (r.status === 429) { limited = true; check("429 includes Retry-After", !!r.headers.get("retry-after")); break; } }
+  for (let i = 0; i < 40; i++) { const r = await g.post("/api/auth/login", { email: `x${i}@y.z`, password: "whatever-password" }); if (r.status === 429) { limited = true; check("429 includes Retry-After", !!r.headers.get("retry-after")); break; } }
   check("Login rate limit per IP enforced", limited);
   let reportLimited = false;
   for (let i = 0; i < 4; i++) {

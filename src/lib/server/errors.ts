@@ -8,4 +8,7 @@ export const forbidden = (msg = "You do not have permission to do that.") => new
 export const notFound = (msg = "Not found.") => new ApiError(404, "NOT_FOUND", msg);
 export const badRequest = (msg: string, extra?: Record<string, unknown>) => new ApiError(400, "BAD_REQUEST", msg, extra);
 export const conflict = (msg: string) => new ApiError(409, "CONFLICT", msg);
-export const tooMany = (retryAfter: number) => new ApiError(429, "RATE_LIMITED", "Too many requests. Please slow down and try again shortly.", { retryAfter });
+export const tooMany = (retryAfter: number) => {
+  const wait = retryAfter < 90 ? `${Math.max(1, Math.ceil(retryAfter))} seconds` : retryAfter < 5400 ? `${Math.ceil(retryAfter / 60)} minutes` : `${Math.ceil(retryAfter / 3600)} hours`;
+  return new ApiError(429, "RATE_LIMITED", `You've hit the limit for this action. Please try again in about ${wait}.`, { retryAfter });
+};

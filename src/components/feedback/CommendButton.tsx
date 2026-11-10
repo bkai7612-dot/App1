@@ -19,7 +19,7 @@ export function CommendButton({ profileId, signedIn, plus = false }: { profileId
     e.preventDefault(); setBusy(true); setErr(null);
     try {
       const r = await api<{ status: string }>("/api/commendations", { body: { playerProfileId: profileId, category, comment: comment.trim() || null } });
-      setDone(r.status === "approved" ? "Thanks! Your commendation is live." : "Thanks! Your commendation counts once a moderator approves your comment.");
+      setDone(r.status === "approved" ? "Thanks! Your commendation is live." : comment.trim() ? "Thanks! Your commendation counts once a moderator approves your comment." : "Thanks! Because your account is new, your commendation will appear after a short check (usually within 3 days).");
       router.refresh();
     } catch (e) { setErr(e); } finally { setBusy(false); }
   };

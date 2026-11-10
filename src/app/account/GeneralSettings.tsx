@@ -13,6 +13,7 @@ export function GeneralSettings({ displayName, email, emailVerified, notificatio
   const [prefs, setPrefs] = useState(Object.fromEntries(notifications.map((n) => [n.key, n.on])));
   const [newEmail, setNewEmail] = useState("");
   const [newPw, setNewPw] = useState("");
+  const [curPw, setCurPw] = useState("");
   const [msg, setMsg] = useState<Record<string, string>>({});
   const say = (k: string, v: string) => setMsg((m) => ({ ...m, [k]: v }));
   const errText = (e: unknown) => (e instanceof ClientApiError ? e.message : "Something went wrong.");
@@ -43,7 +44,8 @@ export function GeneralSettings({ displayName, email, emailVerified, notificatio
 
       <section className="glass p-6">
         <h2 className="font-display text-lg font-semibold">Password</h2>
-        <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={async (e) => { e.preventDefault(); try { await run(() => api("/api/account/password", { body: { newPassword: newPw } })); setNewPw(""); say("pw", "Password changed. Other sessions were signed out."); } catch (e) { say("pw", errText(e)); } }}>
+        <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={async (e) => { e.preventDefault(); try { await run(() => api("/api/account/password", { body: { currentPassword: curPw, newPassword: newPw } })); setNewPw(""); setCurPw(""); say("pw", "Password changed. Other sessions were signed out."); } catch (e) { say("pw", errText(e)); } }}>
+          <label className="flex-1"><span className="label">Current password</span><input type="password" required value={curPw} onChange={(e) => setCurPw(e.target.value)} className="input" autoComplete="current-password" /></label>
           <label className="flex-1"><span className="label">New password</span><input type="password" required minLength={12} maxLength={128} value={newPw} onChange={(e) => setNewPw(e.target.value)} className="input" autoComplete="new-password" /></label>
           <button className="btn-ghost self-end">Change password</button>
         </form>

@@ -6,10 +6,11 @@ export { steamLoginUrl };
 import { discordLoginUrl } from "@/lib/server/discord";
 import { battlenetLoginUrl } from "@/lib/server/battlenet";
 import { publicId } from "@/lib/crypto";
+import { withDb, SYSTEM } from "@/lib/db";
 
 /** Creates a pending Steam OpenID verification and returns the redirect URL. */
 export async function startSteamVerification(tx: Tx, userId: string, profileId: string, kind: "link_verification" | "profile_claim", gamingAccountId: string | null) {
-  await tx.q(`UPDATE account_verifications SET status = 'cancelled', decided_at = now() WHERE user_id = $1 AND player_profile_id = $2 AND kind = $3 AND status = 'pending'`, [userId, profileId, kind]);
+  await cancelPendingVerifications(userId, profileId, kind, gamingAccountId);
   const state = randomToken(24);
   await tx.q(
     `INSERT INTO account_verifications (user_id, player_profile_id, gaming_account_id, kind, method, nonce_hash, expires_at)
@@ -21,7 +22,7 @@ export async function startSteamVerification(tx: Tx, userId: string, profileId: 
 type Kind = "link_verification" | "profile_claim";
 
 async function startOAuth(tx: Tx, method: "discord_connection" | "battlenet_oauth", userId: string, profileId: string, kind: Kind, gamingAccountId: string | null) {
-  await tx.q(`UPDATE account_verifications SET status = 'cancelled', decided_at = now() WHERE user_id = $1 AND player_profile_id = $2 AND kind = $3 AND status = 'pending'`, [userId, profileId, kind]);
+  await cancelPendingVerifications(userId, profileId, kind, gamingAccountId);
   const state = randomToken(24);
   await tx.q(
     `INSERT INTO account_verifications (user_id, player_profile_id, gaming_account_id, kind, method, nonce_hash, expires_at)
@@ -45,7 +46,7 @@ export async function startBattlenetVerification(tx: Tx, userId: string, profile
  * status). A moderator only has to look for the code and click Approve. Returns the code to show the player.
  */
 export async function startCodeChallenge(tx: Tx, userId: string, profileId: string, kind: Kind, gamingAccountId: string | null, note: string | null) {
-  await tx.q(`UPDATE account_verifications SET status = 'cancelled', decided_at = now() WHERE user_id = $1 AND player_profile_id = $2 AND kind = $3 AND status = 'pending'`, [userId, profileId, kind]);
+  await cancelPendingVerifications(userId, profileId, kind, gamingAccountId);
   const code = publicId("SS", 6);
   await tx.q(
     `INSERT INTO account_verifications (user_id, player_profile_id, gaming_account_id, kind, method, challenge_code, claim_note, expires_at)
@@ -74,7 +75,7 @@ export async function consumeVerificationState(tx: Tx, state: string, method: st
 
 /** Creates a QR handoff: returns the one-time token to put in the QR link (state is minted when the phone continues). */
 export async function startHandoff(tx: Tx, userId: string, profileId: string, kind: Kind, gamingAccountId: string | null, method: "steam_openid" | "battlenet_oauth" | "discord_connection") {
-  await tx.q(`UPDATE account_verifications SET status = 'cancelled', decided_at = now() WHERE user_id = $1 AND player_profile_id = $2 AND kind = $3 AND status = 'pending'`, [userId, profileId, kind]);
+  await cancelPendingVerifications(userId, profileId, kind, gamingAccountId);
   const token = randomToken(24);
   const row = await tx.one<{ id: string }>(
     `INSERT INTO account_verifications (user_id, player_profile_id, gaming_account_id, kind, method, handoff, handoff_token_hash, expires_at)
@@ -90,4 +91,16 @@ export async function continueHandoff(tx: Tx, token: string) {
   const state = randomToken(24);
   await tx.q(`UPDATE account_verifications SET nonce_hash = $2, expires_at = now() + interval '15 minutes' WHERE id = $1`, [v.id, sha256(state)]);
   return { method: v.method, state };
+}
+
+/**
+ * Cancels the user's earlier pending attempt for the same target before starting a new one (I-01).
+ * Runs in system context: users may not update verification rows directly (RLS), which previously
+ * made this a silent no-op and locked people out of every other verification method.
+ */
+export async function cancelPendingVerifications(userId: string, profileId: string, kind: string, gamingAccountId: string | null) {
+  await withDb(SYSTEM, (tx) => tx.q(
+    `UPDATE account_verifications SET status = 'cancelled', decided_at = now(), nonce_hash = NULL, handoff_token_hash = NULL
+     WHERE user_id = $1 AND player_profile_id = $2 AND kind = $3 AND status = 'pending' AND gaming_account_id IS NOT DISTINCT FROM $4`,
+    [userId, profileId, kind, gamingAccountId]));
 }

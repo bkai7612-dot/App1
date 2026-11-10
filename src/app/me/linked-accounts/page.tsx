@@ -41,7 +41,7 @@ export default async function LinkedAccounts({ searchParams }: { searchParams: P
        FROM gaming_accounts ga JOIN player_profiles p ON p.id = ga.player_profile_id JOIN platforms pl ON pl.id = ga.platform_id
        WHERE p.owner_user_id = $1 AND ga.verification_status <> 'unlinked' ORDER BY ga.linked_at`, [auth.user.id]),
     pending: await tx.q<{ id: string; kind: string; method: string; created_at: Date; gaming_account_id: string | null; player_profile_id: string; challenge_code: string | null }>(
-      `SELECT id, kind, method, created_at, gaming_account_id, player_profile_id, challenge_code FROM account_verifications WHERE user_id = $1 AND status = 'pending' ORDER BY created_at DESC`, [auth.user.id]),
+      `SELECT id, kind, method, created_at, gaming_account_id, player_profile_id, challenge_code FROM account_verifications WHERE user_id = $1 AND status = 'pending' AND (expires_at IS NULL OR expires_at > now()) ORDER BY created_at DESC`, [auth.user.id]),
   }));
   const msg = sp.steam ? STEAM_MSG[sp.steam] : sp.discord ? MSG[sp.discord] : sp.battlenet ? MSG[sp.battlenet] : null;
   return (
@@ -62,7 +62,7 @@ export default async function LinkedAccounts({ searchParams }: { searchParams: P
             const pend = data.pending.find((p) => p.gaming_account_id === a.id);
             return { id: a.id, player_profile_id: a.player_profile_id, username: a.username, platform: a.platform, platform_slug: a.platform_slug,
               verification_status: a.verification_status, verification_method: a.verification_method,
-              options: verificationOptions(a.platform_slug, a.discord_connection_type), pendingCode: pend?.challenge_code ?? null, pending: !!pend };
+              options: verificationOptions(a.platform_slug, a.discord_connection_type), pendingCode: pend?.challenge_code ?? null, pending: !!pend, pendingId: pend?.id ?? null, pendingMethod: pend?.method ?? null };
           })}
         />
       )}

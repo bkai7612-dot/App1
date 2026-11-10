@@ -10,7 +10,9 @@ export const GET = route({ auth: "auth" }, async ({ auth }) => {
   const rows = await withDb(auth!.db, (tx) =>
     tx.q<{ id: string; created_at: Date; last_seen_at: Date; user_agent: string | null; mfa_method: string | null }>(
       `SELECT id, created_at, last_seen_at, user_agent, mfa_method FROM sessions
-       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now() ORDER BY last_seen_at DESC`, [auth!.user.id]));
+       WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+         AND (mfa_verified_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM users u WHERE u.id = sessions.user_id AND u.mfa_enabled))
+       ORDER BY last_seen_at DESC`, [auth!.user.id]));
   return {
     sessions: rows.map((r) => ({ id: r.id, createdAt: r.created_at, lastSeenAt: r.last_seen_at, device: deviceFamily(r.user_agent ?? ""), mfaMethod: r.mfa_method, current: r.id === auth!.session.id })),
   };

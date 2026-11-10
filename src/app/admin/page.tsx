@@ -16,7 +16,7 @@ export default async function AdminHome() {
     (SELECT count(*) FROM reports WHERE status IN ('disputed','appealed') AND deleted_at IS NULL) AS disputed,
     (SELECT count(*) FROM report_appeals WHERE status IN ('submitted','under_review')) AS appeals,
     (SELECT count(*) FROM commendations WHERE status = 'pending') AS pending_comm,
-    (SELECT count(*) FROM account_verifications WHERE status = 'pending' AND method = 'manual_review') AS pending_ver,
+    (SELECT count(*) FROM account_verifications WHERE status = 'pending' AND method IN ('manual_review','profile_code') AND (expires_at IS NULL OR expires_at > now())) AS pending_ver,
     (SELECT count(*) FROM report_responses WHERE status = 'pending') AS pending_resp,
     (SELECT count(*) FROM player_comments WHERE status = 'pending') AS pending_comments,
     (SELECT count(*) FROM comment_disputes WHERE status = 'open') AS open_disputes,

@@ -49,7 +49,7 @@ export function MfaChallenge({ next, hasTotp, hasPasskey }: { next: string; hasT
       )}
       {err && <p role="alert" className="text-sm text-neg">{err}</p>}
       <div className="flex justify-between text-sm text-text-muted">
-        <button onClick={() => setUseRecovery(!useRecovery)} className="hover:text-text">{useRecovery ? "Use authenticator code" : "Use a recovery code"}</button>
+        <button onClick={() => { setUseRecovery(!useRecovery); setErr(null); }} className="hover:text-text">{useRecovery ? "Use authenticator code" : "Use a recovery code"}</button>
         <Link href="/account-recovery" className="hover:text-text">Lost access?</Link>
       </div>
     </div>

@@ -5,13 +5,13 @@ import { dummyVerify, verifyPassword } from "@/lib/auth/password";
 import { normalizeEmail, checkNewDevice } from "@/lib/auth/flows";
 import { createSession } from "@/lib/auth/session";
 import { securityEvent } from "@/lib/server/audit";
-import { ApiError } from "@/lib/server/errors";
-import { rateLimit } from "@/lib/server/ratelimit";
+import { ApiError, tooMany } from "@/lib/server/errors";
+import { rateLimit, peekRate } from "@/lib/server/ratelimit";
 
 const Body = z.object({ email: z.string().trim().max(254), password: z.string().min(1).max(128) });
 const GENERIC = "Incorrect email or password, or the account is temporarily locked. Try again later or reset your password.";
 
-export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip", limit: 20, windowSec: 900 } }, async ({ body, meta }) => {
+export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip", limit: 30, windowSec: 900 } }, async ({ body, meta }) => {
   const emailNorm = normalizeEmail(body.email);
 
   const user = await withDb(SYSTEM, (tx) =>
@@ -25,10 +25,13 @@ export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip"
     `SELECT 1 FROM security_events WHERE user_id = $1 AND event_type = 'login_success' AND ip_hash = $2 AND created_at > now() - interval '90 days' LIMIT 1`,
     [user.id, meta.ipHash]))) : false;
   // Per-account limit for unknown networks (slows distributed guessing); known networks have their own per-IP limit.
-  if (!knownNetwork) await rateLimit(`login-email:${emailNorm}`, 10, 900);
-  else await rateLimit(`login-email-known:${emailNorm}:${meta.ipHash}`, 10, 900);
+  // Only FAILED attempts count toward the per-account limit (successful logins never lock you out).
+  const failBucket = knownNetwork ? `login-email-known:${emailNorm}:${meta.ipHash}` : `login-email:${emailNorm}`;
+  if ((await peekRate(failBucket, 900)) >= 10) throw tooMany(900);
+  const failed = async () => { await rateLimit(failBucket, 1000, 900); };
 
   if (!user || user.deleted_at) {
+    await failed();
     await dummyVerify(body.password);
     throw new ApiError(401, "INVALID_CREDENTIALS", GENERIC);
   }
@@ -41,6 +44,7 @@ export const POST = route({ auth: "public", body: Body, rate: { name: "login-ip"
   }
   const ok = await verifyPassword(user.password_hash, body.password);
   if (!ok) {
+    await failed();
     await withDb(SYSTEM, async (tx) => {
       const n = user.failed_login_count + 1;
       // Escalating lockout: from the 5th consecutive failure, 15 min doubling up to 1h (per-IP/email rate limits also apply).

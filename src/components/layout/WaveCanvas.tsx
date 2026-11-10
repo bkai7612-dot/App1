@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Flowing iridescent waves that travel across the page (canvas).
@@ -83,15 +83,22 @@ export function WaveCanvas({ variant = "hero" }: { variant?: "hero" | "page" }) 
 }
 
 export function MotionToggle() {
+  // Label is set after mount from the real setting (server can't know it), so it never shows a stale "On".
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    setOn(motionAllowed());
+    const sync = () => setOn(motionAllowed());
+    window.addEventListener("ss-motion-change", sync);
+    return () => window.removeEventListener("ss-motion-change", sync);
+  }, []);
   const toggle = () => {
     const next = motionAllowed() ? "off" : "on";
     try { localStorage.setItem("ss_motion", next); } catch { /* ignore */ }
     window.dispatchEvent(new Event("ss-motion-change"));
-    const el = document.getElementById("ss-motion-state"); if (el) el.textContent = next === "on" ? "On" : "Off";
   };
   return (
-    <button type="button" onClick={toggle} className="rounded-lg border border-ink-line px-3 py-1.5 text-xs text-text-muted hover:text-text">
-      Background animation: <span id="ss-motion-state" suppressHydrationWarning>{typeof window !== "undefined" && !motionAllowed() ? "Off" : "On"}</span>
+    <button type="button" onClick={toggle} aria-pressed={on ?? undefined} className="rounded-lg border border-ink-line px-3 py-1.5 text-xs text-text-muted hover:text-text">
+      Background animation: <span>{on === null ? "…" : on ? "On" : "Off"}</span>
     </button>
   );
 }

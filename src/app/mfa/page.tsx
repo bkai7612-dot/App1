@@ -18,7 +18,7 @@ export default async function Mfa({ searchParams }: { searchParams: Promise<{ ne
     `SELECT EXISTS (SELECT 1 FROM mfa_totp WHERE user_id = $1 AND confirmed_at IS NOT NULL) AS totp,
             (SELECT count(*) FROM webauthn_credentials WHERE user_id = $1) AS passkeys`, [auth.user.id]));
   return (
-    <AuthShell title="Confirm it's you" subtitle="Use your passkey or authenticator app to finish signing in.">
+    <AuthShell title="Confirm it's you" subtitle={Number(m?.passkeys ?? 0) > 0 && m?.totp ? "Use your passkey or authenticator app to finish signing in." : Number(m?.passkeys ?? 0) > 0 ? "Use your passkey to finish signing in." : "Enter the code from your authenticator app to finish signing in."}>
       <MfaChallenge next={next} hasTotp={!!m?.totp} hasPasskey={Number(m?.passkeys ?? 0) > 0} />
     </AuthShell>
   );
