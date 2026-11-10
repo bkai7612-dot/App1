@@ -16,6 +16,8 @@ import { CommendButton } from "@/components/feedback/CommendButton";
 import { ClaimProfileButton } from "@/components/feedback/ClaimProfileButton";
 import { OwnerReportActions } from "@/components/feedback/OwnerReportActions";
 import { VoteButtons } from "@/components/feedback/VoteButtons";
+import { verificationOptions } from "@/lib/server/verification-options";
+import { withDb as withDb2, GUEST } from "@/lib/db";
 import { CommentButton } from "@/components/feedback/CommentButton";
 import { DisputeCommentButton } from "@/components/feedback/DisputeCommentButton";
 import { COMMENDATION_LABELS, REPORT_LABELS } from "@/lib/categories";
@@ -53,6 +55,8 @@ export default async function PlayerPage({ params, searchParams }: Props) {
   ]);
   const isOwner = !!viewer && profile.owner_user_id === viewer.user.id;
   const returnTo = `/players/${profile.public_id}?tab=${tab}`;
+  const dType = await withDb2(GUEST, (tx) => tx.one<{ t: string | null }>(`SELECT discord_connection_type AS t FROM platforms WHERE slug = $1`, [profile.platform_slug]));
+  const claimOptions = verificationOptions(profile.platform_slug, dType?.t ?? null);
   const canVote = !!viewer && !isOwner && viewer.user.mfaEnabled && viewer.session.mfaVerified && viewer.user.emailVerified;
   const voteReason = !viewer ? "Sign in to vote (free)." : isOwner ? "You can't vote on your own profile." : "Set up two-factor authentication in Account Settings to vote.";
 
@@ -95,7 +99,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
               {!isOwner && (
                 <Link href={viewer ? `/players/${profile.public_id}/report` : `/login?next=/players/${profile.public_id}/report`} className="btn-ghost"><Flag className="h-4 w-4" /> Report behaviour</Link>
               )}
-              {!profile.claimed && <ClaimProfileButton profileId={profile.id} signedIn={!!viewer} platformSlug={profile.platform_slug} />}
+              {!profile.claimed && <ClaimProfileButton profileId={profile.id} signedIn={!!viewer} platformName={profile.platform_name} options={claimOptions} />}
             </div>
           </div>
           <div className="mt-6">
@@ -165,7 +169,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
           )}
 
           {tab === "negative" && (
-            plus || isOwner ? <NegativeList profileId={profile.id} ownerUserId={isOwner ? viewer!.user.id : null} plus={plus} /> :
+            plus || isOwner ? <NegativeList profileId={profile.id} ownerUserId={isOwner ? viewer!.user.id : null} plus={plus} identity={profile.identity_status} /> :
             <PremiumLock title="Unlock Report Summaries" text="Read moderated report summaries, categories, dates and dispute or resolution status." returnTo={returnTo} signedIn={!!viewer} />
           )}
 
@@ -242,7 +246,7 @@ async function CommentsList({ profileId, isOwner, plus }: { profileId: string; i
   );
 }
 
-async function NegativeList({ profileId, ownerUserId, plus }: { profileId: string; ownerUserId: string | null; plus: boolean }) {
+async function NegativeList({ profileId, ownerUserId, plus, identity }: { profileId: string; ownerUserId: string | null; plus: boolean; identity: string }) {
   const items = await getPublicReports(profileId);
   let ownerState: Record<string, { response: string | null; appeal: string | null }> = {};
   if (ownerUserId) {
@@ -255,6 +259,7 @@ async function NegativeList({ profileId, ownerUserId, plus }: { profileId: strin
   }
   return (
     <div className="space-y-4">
+      {identity !== "verified" && !ownerUserId && <Notice tone="warn"><strong>Identity unverified.</strong> Nobody has proven they own this {"account"} yet. These reports are about whoever uses this username on this game and platform, which may not be the person you have in mind. If the owner verifies later, they can respond and appeal.</Notice>}
       {ownerUserId && !plus && <Notice>You are the verified owner of this profile, so you can see published reports about you and respond or appeal for free.</Notice>}
       {items.length === 0 ? <Empty title="No published reports">No reports about this profile have been published by moderators.</Empty> : (
         <ul className="grid gap-3">
@@ -262,6 +267,7 @@ async function NegativeList({ profileId, ownerUserId, plus }: { profileId: strin
             <li key={r.id} className="glass p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <ReportStatusBadge status={r.status} />
+                {identity !== "verified" && <span className="chip border-amber-400/40 text-amber-300">Identity unverified</span>}
                 <span className="chip border-ink-line text-text-muted">{REPORT_LABELS[r.category]}</span>
                 <span className="ml-auto text-xs text-text-muted">Ref {r.public_ref} · published {fmtDate(r.published_at)}{r.is_demo ? " · demo" : ""}</span>
               </div>

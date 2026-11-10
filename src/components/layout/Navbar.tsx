@@ -15,7 +15,7 @@ export const PUBLIC_LINKS = [
 ];
 
 export const ACCOUNT_LINKS = [
-  { href: "/me/profile", label: "My Profile" },
+  { href: "/me/profile", label: "My Profile & Activity" },
   { href: "/me/reports", label: "My Reports" },
   { href: "/me/commendations", label: "My Commendations" },
   { href: "/me/linked-accounts", label: "Linked Accounts" },

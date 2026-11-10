@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { GateError } from "@/components/feedback/MfaGateMessage";
+import { GameInput } from "@/components/forms/GameInput";
 
 type Opt = { slug: string; name: string; identifier_label?: string };
 
 export function NewPlayerForm({ games, platforms, initial }: { games: Opt[]; platforms: Opt[]; initial: { name: string; game: string; platform: string } }) {
   const [name, setName] = useState(initial.name);
-  const [game, setGame] = useState(initial.game || games[0]?.slug);
+  const [game, setGame] = useState(initial.game || "");
   const [platform, setPlatform] = useState(initial.platform || platforms[0]?.slug);
   const [pid, setPid] = useState("");
   const [existing, setExisting] = useState<string[] | null>(null);
@@ -31,7 +32,7 @@ export function NewPlayerForm({ games, platforms, initial }: { games: Opt[]; pla
     <form onSubmit={(e) => { e.preventDefault(); submit(false); }} className="glass space-y-4 p-6">
       <label className="block"><span className="label">{label}</span><input required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} className="input" /></label>
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block"><span className="label">Game</span><select value={game} onChange={(e) => setGame(e.target.value)} className="input">{games.map((g) => <option key={g.slug} value={g.slug}>{g.name}</option>)}</select></label>
+        <label className="block"><span className="label">Game</span><GameInput games={games} value={game} onChange={setGame} /></label>
         <label className="block"><span className="label">Platform</span><select value={platform} onChange={(e) => setPlatform(e.target.value)} className="input">{platforms.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></label>
       </div>
       <label className="block"><span className="label">Platform ID (optional)</span><input maxLength={128} value={pid} onChange={(e) => setPid(e.target.value)} className="input" placeholder="e.g. SteamID64 or Riot ID tag" />
@@ -45,7 +46,7 @@ export function NewPlayerForm({ games, platforms, initial }: { games: Opt[]; pla
         </div>
       )}
       <GateError error={err} />
-      <button disabled={busy} className="btn-primary w-full">{busy && <span className="spinner" />}Create profile</button>
+      <button disabled={busy || !game} className="btn-primary w-full">{busy && <span className="spinner" />}Create profile</button>
     </form>
   );
 }

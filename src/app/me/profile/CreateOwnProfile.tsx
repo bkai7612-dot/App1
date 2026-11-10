@@ -3,11 +3,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { GateError } from "@/components/feedback/MfaGateMessage";
+import { GameInput } from "@/components/forms/GameInput";
 
 type Opt = { slug: string; name: string };
 export function CreateOwnProfile({ games, platforms }: { games: Opt[]; platforms: Opt[] }) {
   const [name, setName] = useState("");
-  const [game, setGame] = useState(games[0]?.slug);
+  const [game, setGame] = useState("");
   const [platform, setPlatform] = useState(platforms[0]?.slug);
   const [err, setErr] = useState<unknown>(null);
   const router = useRouter();
@@ -17,11 +18,11 @@ export function CreateOwnProfile({ games, platforms }: { games: Opt[]; platforms
       <p className="text-sm text-text-muted">Starts as Unverified. Verify it from Linked Accounts.</p>
       <div className="grid gap-3 sm:grid-cols-3">
         <input required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Your in-game username" aria-label="Username" />
-        <select value={game} onChange={(e) => setGame(e.target.value)} className="input" aria-label="Game">{games.map((g) => <option key={g.slug} value={g.slug}>{g.name}</option>)}</select>
+        <GameInput games={games} value={game} onChange={setGame} id="own-game" />
         <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="input" aria-label="Platform">{platforms.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select>
       </div>
       <GateError error={err} />
-      <button className="btn-primary">Create profile</button>
+      <button className="btn-primary" disabled={!game}>Create profile</button>
     </form>
   );
 }

@@ -41,6 +41,12 @@ export const env = {
   get emailFrom() { return optional("EMAIL_FROM") ?? "ServerSentry <no-reply@localhost>"; },
   get cronSecret() { return optional("CRON_SECRET"); },
   get steamWebApiKey() { return optional("STEAM_WEB_API_KEY"); },
+  /** Discord OAuth app (automatic gaming-account verification). Secret is SERVER ONLY. */
+  get discordClientId() { return optional("DISCORD_CLIENT_ID"); },
+  get discordClientSecret() { return optional("DISCORD_CLIENT_SECRET"); },
+  /** Battle.net OAuth app (official BattleTag verification). Secret is SERVER ONLY. */
+  get battlenetClientId() { return optional("BATTLENET_CLIENT_ID"); },
+  get battlenetClientSecret() { return optional("BATTLENET_CLIENT_SECRET"); },
   get adminRequirePasskey() { return (optional("ADMIN_REQUIRE_PASSKEY") ?? "true") !== "false"; },
   get reportMinAccountAgeHours() { return Number(optional("REPORT_MIN_ACCOUNT_AGE_HOURS") ?? "24"); },
   get launchGatesApproved(): string[] {

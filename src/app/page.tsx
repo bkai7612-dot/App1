@@ -5,6 +5,7 @@ import { PlayerSearchForm } from "@/components/forms/PlayerSearchForm";
 import { PlatformStatusChip } from "@/components/ui/Badges";
 import { getGames, getPlatforms } from "@/lib/server/catalog";
 import { landingStats } from "@/lib/server/players";
+import { verificationOptions } from "@/lib/server/verification-options";
 
 export const dynamic = "force-dynamic";
 
@@ -96,8 +97,9 @@ export default async function Home() {
       <section className="mx-auto mt-20 grid max-w-7xl items-start gap-6 px-4 sm:px-6 lg:grid-cols-2">
         <div className="glass p-6">
           <h2 className="flex items-center gap-2 font-display text-xl font-semibold"><Gamepad2 className="h-5 w-5 text-violet-lavender" /> Supported games</h2>
-          <ul className="mt-5 flex flex-wrap gap-2">
-            {games.map((g) => <li key={g.slug}><Link href={`/search?game=${g.slug}`} className="chip border-ink-line bg-white/[0.03] px-3 py-1.5 text-sm text-text hover:border-violet-brand/60">{g.name}</Link></li>)}
+          <p className="mt-2 text-sm text-text-muted">{games.length} games and counting. Here are the most popular; search to find the rest.</p>
+          <ul className="mt-4 flex flex-wrap gap-2">
+            {games.slice(0, 18).map((g) => <li key={g.slug}><Link href={`/search?game=${g.slug}`} className="chip border-ink-line bg-white/[0.03] px-3 py-1.5 text-sm text-text hover:border-violet-brand/60">{g.name}</Link></li>)}
           </ul>
         </div>
         <div className="glass p-6">
@@ -106,11 +108,11 @@ export default async function Home() {
             {platforms.map((p) => (
               <li key={p.slug} className="flex items-center justify-between py-2.5 text-sm">
                 <span>{p.name}</span>
-                <PlatformStatusChip status={p.integration_status} />
+                <PlatformStatusChip status={verificationOptions(p.slug, p.discord_connection_type).some((o) => o.automatic) ? "verified_linking" : "manual"} />
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-xs text-text-muted">&ldquo;Verified linking&rdquo; means ownership can be confirmed through the platform&apos;s official sign-in. Other platforms support manual identification and moderator-reviewed ownership claims. Official integrations are added only where publisher terms allow.</p>
+          <p className="mt-4 text-xs text-text-muted">&ldquo;Instant verification&rdquo; means players prove ownership with an official sign-in (Steam, Battle.net) or their Discord-verified connections, on their computer or by scanning a QR code with their phone. Other platforms use a quick profile-code check. You only need verification to claim a profile.</p>
         </div>
       </section>
 

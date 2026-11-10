@@ -429,6 +429,53 @@ section("Votes, Plus comments, moderation and owner disputes");
   execFileSync("node", ["scripts/dev-grant-plus.mjs", B.email, "revoke"]);
 }
 
+section("Account verification: code check, QR phone handoff, official sign-in routes");
+{
+  const games = (await db.query(`SELECT count(*)::int AS n FROM games WHERE active`)).rows[0].n;
+  check("Game catalogue expanded (150+ games)", games >= 150, String(games));
+  // Profile code check on an unowned Xbox profile
+  const xp = (await db.query(`SELECT p.id, p.public_id FROM player_profiles p JOIN platforms pl ON pl.id = p.platform_id WHERE pl.slug = 'xbox' AND p.owner_user_id IS NULL AND p.is_demo LIMIT 1`)).rows[0];
+  const opts = await A.c.post("/api/identity/claim", { playerProfileId: xp.id, method: "code" });
+  check("Code check returns a one-time code", opts.status === 200 && /^SS-[A-Z0-9]{6}$/.test(opts.json?.code ?? ""), opts.text);
+  const vRow = (await db.query(`SELECT id, method, challenge_code FROM account_verifications WHERE user_id = $1 AND player_profile_id = $2 AND status = 'pending'`, [A.id, xp.id])).rows[0];
+  check("Code check queued for moderators with the code", vRow?.method === "profile_code" && vRow.challenge_code === opts.json.code);
+  check("Claimant cannot approve own claim", (await A.c.post(`/api/admin/verifications/${vRow.id}`, { decision: "approve_verified", note: "Saw my own code" })).status === 403);
+  check("Moderator approves after seeing the code", (await M.c.post(`/api/admin/verifications/${vRow.id}`, { decision: "approve_verified", note: "Code visible in bio" })).status === 200);
+  check("Approved claim makes the claimant the owner", (await db.query(`SELECT owner_user_id FROM player_profiles WHERE id = $1`, [xp.id])).rows[0].owner_user_id === A.id);
+  const unowned = (await db.query(`SELECT p.id FROM player_profiles p JOIN platforms pl ON pl.id = p.platform_id WHERE p.owner_user_id IS NULL AND pl.slug <> 'battle-net' AND p.deleted_at IS NULL LIMIT 1`)).rows[0];
+  check("Unavailable method rejected (Battle.net sign-in on a non-Battle.net profile)", (await B.c.post("/api/identity/claim", { playerProfileId: unowned.id, method: "battlenet" })).status === 400);
+
+  // QR handoff for a PSN account on C's own profile (Discord route)
+  const psn = await C.c.post("/api/identity/accounts", { playerProfileId: ownedProfile.id, platformSlug: "playstation-network", username: `PSN_${RUN}` });
+  check("Owner can add a PSN account", psn.status === 200);
+  const h = await C.c.post("/api/identity/handoff", { gamingAccountId: psn.json.id, method: "discord" });
+  check("QR handoff created with one-time link", h.status === 200 && /\/v\/[A-Za-z0-9_-]{20,}$/.test(h.json?.url ?? "") && /<svg/.test(h.json?.qrSvg ?? ""));
+  check("Another user cannot start a handoff for this account", (await B.c.post("/api/identity/handoff", { gamingAccountId: psn.json.id, method: "discord" })).status === 404);
+  const status1 = await C.c.get(`/api/identity/handoff/${h.json.id}`);
+  check("Desktop sees 'waiting' before scan", status1.json?.state === "waiting");
+  check("Other users cannot poll someone else's handoff", (await B.c.get(`/api/identity/handoff/${h.json.id}`)).status === 404);
+  const token = h.json.url.split("/v/")[1];
+  const phonePage = await client().get(`/v/${token}`);
+  check("Phone page shows which ServerSentry member it links to", phonePage.status === 200 && phonePage.text.includes(C.name));
+  const phone = client();
+  const go = await phone.post("/api/identity/handoff/continue", { token, confirm: true });
+  check("Phone continues to official sign-in without a ServerSentry login", go.status === 200 && go.json.redirect.startsWith("https://discord.com/oauth2/authorize?") && /scope=identify\+connections/.test(go.json.redirect));
+  check("QR link is single-use", (await client().post("/api/identity/handoff/continue", { token, confirm: true })).status === 400);
+  check("Desktop sees 'scanned'", (await C.c.get(`/api/identity/handoff/${h.json.id}`)).json?.state === "scanned");
+  check("Continue requires explicit confirmation", (await client().post("/api/identity/handoff/continue", { token, confirm: false })).status === 400);
+  const forged = await client().get(`/api/identity/discord/callback?state=forged-state-value&code=abc`);
+  check("Forged Discord callback without session goes nowhere", forged.status === 307 && /\/login/.test(forged.headers.get("location") ?? ""));
+  const forged2 = await C.c.get(`/api/identity/battlenet/callback?state=forged-state-value&code=abc`);
+  check("Forged Battle.net callback rejected", forged2.status === 307 && /battlenet=invalid/.test(forged2.headers.get("location") ?? ""));
+  const bn = await B.c.get("/api/identity/handoff/00000000-0000-0000-0000-000000000000");
+  check("Unknown handoff id returns 404", bn.status === 404);
+  const app = new pg.Client({ connectionString: process.env.DATABASE_URL }); await app.connect();
+  await app.query("BEGIN"); await app.query(`SELECT set_config('search_path','ss, public',true), set_config('app.user_id',$1,true), set_config('app.role','user',true)`, [B.id]);
+  let err; try { await app.query(`INSERT INTO account_verifications (user_id, player_profile_id, kind, method, handoff, handoff_token_hash) VALUES ($1, $2, 'profile_claim', 'discord_connection', true, 'x')`, [B.id, shadow.id]); } catch (e) { err = e.code; }
+  await app.query("ROLLBACK"); await app.end();
+  check("DB: users cannot create handoff rows directly", err === "42501");
+}
+
 section("Database Row Level Security (direct attack as app role)");
 {
   const app = new pg.Client({ connectionString: process.env.DATABASE_URL });

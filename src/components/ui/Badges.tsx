@@ -43,8 +43,8 @@ export function ReportStatusBadge({ status, audience = "public" }: { status: str
 
 export function PlatformStatusChip({ status }: { status: string }) {
   const map: Record<string, [string, string]> = {
-    verified_linking: ["Verified linking", "border-pos/40 text-pos bg-pos/10"],
-    manual: ["Manual identification", "border-ink-line text-text-muted"],
+    verified_linking: ["Instant verification", "border-pos/40 text-pos bg-pos/10"],
+    manual: ["Code check", "border-ink-line text-text-muted"],
     future: ["Future integration", "border-ink-line text-text-muted/70"],
   };
   const [label, cls] = map[status] ?? map.manual;

@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Search } from "lucide-react";
+import { GameInput } from "./GameInput";
 
 type Opt = { slug: string; name: string };
 
@@ -31,10 +32,7 @@ export function PlayerSearchForm({ games, platforms, initial, variant = "hero" }
       </label>
       <label className="block">
         <span className="sr-only">Game</span>
-        <select value={game} onChange={(e) => setGame(e.target.value)} className="input border-transparent bg-ink/60">
-          <option value="">All games</option>
-          {games.map((g) => <option key={g.slug} value={g.slug}>{g.name}</option>)}
-        </select>
+        <GameInput games={games} value={game} onChange={setGame} allowAll className="input border-transparent bg-ink/60" />
       </label>
       <label className="block">
         <span className="sr-only">Platform</span>
