@@ -232,10 +232,18 @@ const DB = {
   pendingComments: [{ id: ++seq, pid: "SS-N4XP7QJT", cat: "great_communication", comment: "Best shot-caller I've queued with this season.", by: "DemoMember4" }],
   log: [],
   myReports: [],
+  votes: { "SS-7KQ2M9XA": { up: 5, down: 3 }, "SS-H3VTN6PE": { up: 4, down: 0 }, "SS-R8MDW2KC": { up: 0, down: 0 }, "SS-N4XP7QJT": { up: 6, down: 1 }, "SS-A9ZB3LUF": { up: 3, down: 0 }, "SS-K6TYV5HD": { up: 0, down: 2 } },
+  comments: [
+    { id: 201, pid: "SS-7KQ2M9XA", tone: "positive", body: "Solid anchor on defence and always shares intel. Queued with him five times this season and every game was positive.", status: "approved", days: 6, by: "DemoMember3" },
+    { id: 202, pid: "SS-7KQ2M9XA", tone: "negative", body: "Got very heated in voice chat after we lost the first two rounds. Calmed down later but it wasn't fun.", status: "approved", days: 14, by: "DemoMember5" },
+    { id: 203, pid: "SS-7KQ2M9XA", tone: "neutral", body: "Mixed experience. Good callouts, but tends to go off on his own and ignore the plan.", status: "approved", days: 30, by: "DemoMember6" },
+    { id: 204, pid: "SS-N4XP7QJT", tone: "positive", body: "Patient with newer players and explains utility usage clearly.", status: "approved", days: 9, by: "DemoMember1" },
+    { id: 205, pid: "SS-7KQ2M9XA", tone: "negative", body: "Kept spamming the same voice line all match.", status: "pending", days: 0, by: "DemoMember6" },
+  ],
 };
 
 // ---------- State ----------
-const S = { role: "guest", view: "home", search: { q: "", game: "", platform: "" }, pid: null, tab: "overview", adminView: "overview", rid: null, upgraded: false, given: new Set() };
+const S = { myVotes: {}, commented: new Set(), role: "guest", view: "home", search: { q: "", game: "", platform: "" }, pid: null, tab: "overview", adminView: "overview", rid: null, upgraded: false, given: new Set() };
 const ROLES = [["guest", "Guest"], ["free", "Free member"], ["plus", "Plus member"], ["owner", "Profile owner"], ["mod", "Moderator"]];
 const NAMES = { free: "TestPlayer", plus: "TestPlusMember", owner: "TestOwner", mod: "TestModerator" };
 const isPlus = () => S.role === "plus" || (S.upgraded && S.role !== "guest");
@@ -340,12 +348,12 @@ V.search = () => {
         <div style="min-width:0;flex:1"><div class="row"><span class="name">${esc(p.name)}</span>${ident(p.ident)}${p.owner ? '<span class="chip vio">Claimed by owner</span>' : ""}</div>
         <p class="small muted" style="margin-top:4px">${p.game} · ${p.platform} · <code>${p.id}</code></p>
         ${dup[p.name] > 1 ? '<p class="tiny" style="color:var(--warn);margin-top:4px">Shares a username with another profile. Check game, platform and ID.</p>' : ""}</div>
-        <div class="counts"><span class="count pos" title="Approved commendations">+${st.pos}</span><span class="count neg" title="Published reports">−${st.neg}</span></div></button>`; }).join("")
+        <div class="counts"><span class="count" style="background:rgba(255,255,255,.04);color:var(--muted)" title="Community votes">▲ ${DB.votes[p.id].up} ▼ ${DB.votes[p.id].down}</span><span class="count pos" title="Approved commendations">+${st.pos}</span><span class="count neg" title="Published reports">−${st.neg}</span></div></button>`; }).join("")
       : `<div class="glass pad" style="text-align:center"><p>No matching player profiles.</p><p class="small muted" style="margin-top:6px">In the full app, signed-in members can add a missing player as an unverified profile.</p></div>`}
   </div>`;
 };
 
-const TABS = [["overview", "Overview"], ["positive", "Positive Feedback"], ["negative", "Negative Reports"], ["linked", "Linked Accounts"], ["history", "Reputation History"]];
+const TABS = [["overview", "Overview"], ["positive", "Positive Feedback"], ["comments", "Comments"], ["negative", "Negative Reports"], ["linked", "Linked Accounts"], ["history", "Reputation History"]];
 V.profile = () => {
   const p = profile(S.pid), st = stats(p.id), own = isOwnerOf(p);
   return `<div class="wrap">
@@ -359,16 +367,23 @@ V.profile = () => {
           <p class="tiny muted" style="margin-top:8px;max-width:520px">${IDENT[p.ident][2]}</p>
         </div>
         <div class="stack" style="gap:8px;min-width:200px">
-          ${own ? '<span class="notice" style="font-size:12.5px">This is your profile</span>' : `<button class="btn pos" data-act="commend">Give Commendation</button><button class="btn" data-act="report">Report behaviour</button>`}
+          ${own ? '<span class="notice" style="font-size:12.5px">This is your profile</span>' : `<button class="btn pos" data-act="commend">Give Commendation</button>${isPlus() ? '<button class="btn" data-act="comment">Leave a comment</button>' : '<button class="btn" data-act="comment">🔒 Leave a comment <span class="chip vio">Plus</span></button>'}<button class="btn" data-act="report">Report behaviour</button>`}
           ${!p.owner && signedIn() && S.role !== "owner" ? '<button class="btn sm" data-act="claim">Is this you? Claim profile</button>' : ""}
         </div>
       </div>
+      ${voteWidget(p, own)}
       <div class="row" style="margin-top:20px;gap:12px"><div class="big pos"><strong>+${st.pos}</strong><span>Positive commendations</span></div><div class="big neg"><strong>−${st.neg}</strong><span>Published negative reports</span></div></div>
     </section>
     <div class="tabs" role="tablist">${TABS.map(([k, l]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
     <div style="margin-top:20px">${tabBody(p, st, own)}</div>
   </div>`;
 };
+function voteWidget(p, own) {
+  const v = DB.votes[p.id], mine = S.myVotes[`${S.role}:${p.id}`] ?? 0;
+  const note = !signedIn() ? "Choose a member role in the View as bar to vote (free)." : own ? "You can't vote on your own profile." : "Free for every member · one vote per player · click again to undo";
+  const btn = (val, cls, label, count) => `<button class="btn ${cls}" data-vote="${val}" aria-pressed="${mine === val}" ${!signedIn() || own ? "disabled" : ""} style="${mine === val ? "outline:2px solid currentColor;outline-offset:-2px" : ""}">${label} <b style="font-variant-numeric:tabular-nums">${count}</b></button>`;
+  return `<div style="margin-top:18px"><p class="lbl">Community votes</p><div class="row" role="group" aria-label="Vote on this player">${btn(1, "pos", "▲ Upvote", v.up)}${btn(-1, "neg", "▼ Downvote", v.down)}</div><p class="tiny muted" style="margin-top:6px">${note}</p></div>`;
+}
 function lock(title, text) {
   return `<section class="glass iris glow lock"><h2>${title}</h2><p class="muted" style="margin-top:8px">${text}</p>
     <p class="price"><span class="iris-text">£0.99</span><span class="small muted">/month</span></p>
@@ -391,6 +406,16 @@ function tabBody(p, st, own) {
     if (!isPlus()) return lock("Unlock Player Feedback", "See what other players have said about this account.");
     const items = (DB.comms[p.id] ?? []).filter((c) => c.status === "approved");
     return `<div class="stack">${items.map((c) => `<article class="glass pad"><div class="row" style="justify-content:space-between"><span class="chip ok">${COMM_CATS[c.cat]}</span><span class="tiny muted">${fmt(c.date)}</span></div><p style="margin-top:10px" class="${c.comment ? "" : "muted small"}">${c.comment ? esc(c.comment) : "No written comment."}</p></article>`).join("") || '<p class="muted">No commendations yet.</p>'}</div>`;
+  }
+  if (S.tab === "comments") {
+    if (!isPlus() && !own) return lock("Unlock Player Comments", "Read moderated comments from other players, and write your own.");
+    const items = DB.comments.filter((c) => c.pid === p.id && c.status === "approved");
+    const toneCls = { positive: "ok", neutral: "", negative: "bad" };
+    return `<div class="stack">${own && !isPlus() ? '<div class="notice">These comments are on your account, so you can read them for free. If one is inaccurate, report it and a moderator will review it.</div>' : ""}
+      ${items.map((c) => `<article class="glass pad"><div class="row"><span class="chip ${toneCls[c.tone]}">${c.tone[0].toUpperCase() + c.tone.slice(1)}</span><span class="chip">Moderator approved</span>${c.dispute === "open" ? '<span class="chip warn">Reported as inaccurate · under review</span>' : ""}${c.dispute === "kept" ? '<span class="chip">Accuracy reviewed and kept</span>' : ""}<span class="tiny muted" style="margin-left:auto">${fmt(d(c.days))}</span></div>
+        <p style="margin-top:10px">${esc(c.body)}</p>
+        ${own && !c.dispute ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)"><button class="btn sm" data-dispute="${c.id}">⚑ Report as inaccurate</button></div>` : ""}</article>`).join("") || '<p class="muted">No comments yet. Plus members can leave one; moderators check every comment first.</p>'}
+      <p class="tiny muted">Comments are written by Plus members and checked by moderators. They are personal opinions, not findings by ServerSentry. Authors are never shown.</p></div>`;
   }
   if (S.tab === "negative") {
     if (!isPlus() && !own) return lock("Unlock Report Summaries", "Read moderated report summaries, categories, dates and dispute status.");
@@ -431,9 +456,9 @@ V.pricing = () => `<div class="wrap stack" style="max-width:900px">
   <p class="muted" style="text-align:center">Reputation totals are free for everyone. Plus lets you read what the community has said.</p>
   <div class="grid2" style="grid-template-columns:1fr 1fr;margin-top:12px">
     <section class="glass pad"><h2>Free</h2><p style="font-family:var(--display);font-size:36px;margin-top:6px">£0<span class="small muted">/month</span></p>
-      <ul class="small" style="list-style:none;padding:0;display:grid;gap:7px;margin-top:14px">${["Search players and view profiles", "See positive and negative totals", "Give commendations and submit reports", "See, respond to and appeal reports about you"].map((f) => `<li>✓ ${f}</li>`).join("")}</ul></section>
+      <ul class="small" style="list-style:none;padding:0;display:grid;gap:7px;margin-top:14px">${["Search players and view profiles", "Upvote and downvote players", "Give commendations", "Report misconduct (always free)", "Read comments on your own account and report inaccurate ones", "See, respond to and appeal reports about you"].map((f) => `<li>✓ ${f}</li>`).join("")}</ul></section>
     <section class="glass iris glow pad"><h2 class="iris-text">ServerSentry Plus</h2><p style="font-family:var(--display);font-size:36px;margin-top:6px">£0.99<span class="small muted">/month</span></p>
-      <ul class="small" style="list-style:none;padding:0;display:grid;gap:7px;margin-top:14px">${["Everything in Free", "Read approved commendation comments", "Read moderated report summaries", "Dates, categories, dispute and resolution status", "Reputation history"].map((f) => `<li>✓ ${f}</li>`).join("")}</ul>
+      <ul class="small" style="list-style:none;padding:0;display:grid;gap:7px;margin-top:14px">${["Everything in Free", "Leave written comments on players", "Read approved player comments", "Read moderated report summaries", "Dates, categories, dispute and resolution status", "Reputation history"].map((f) => `<li>✓ ${f}</li>`).join("")}</ul>
       <div style="margin-top:18px">${isPlus() ? '<span class="chip vio">You have Plus</span>' : signedIn() ? '<button class="btn primary" data-act="upgrade">Upgrade to Plus</button>' : '<button class="btn primary" data-role="free">Sign in to upgrade</button>'}</div></section>
   </div>
   <p class="small muted" style="text-align:center">Money can never buy: access to evidence, unmoderated reports, reporter identities, or removal of reports.</p></div>`;
@@ -463,13 +488,21 @@ V.admin = () => {
   const queue = DB.reports.filter((r) => ["submitted", "under_review"].includes(r.status));
   const appeals = DB.reports.filter((r) => r.status === "appealed");
   const responses = DB.reports.filter((r) => r.responseStatus === "pending");
-  const side = [["overview", "Overview"], ["reports", `Reports (${queue.length})`], ["queues", `Other queues (${DB.pendingComments.length + appeals.length + responses.length})`], ["audit", "Activity log"]];
+  const pendingCm = DB.comments.filter((c) => c.status === "pending"), disputes = DB.comments.filter((c) => c.dispute === "open" && c.status === "approved");
+  const side = [["overview", "Overview"], ["comments", `Comments (${pendingCm.length + disputes.length})`], ["reports", `Reports (${queue.length})`], ["queues", `Other queues (${DB.pendingComments.length + appeals.length + responses.length})`], ["audit", "Activity log"]];
   let body = "";
   if (S.adminView === "overview") {
     const all = DB.reports;
-    body = `<h1 style="font-size:26px">Moderation overview</h1><div class="kpis" style="margin-top:16px">${[["Player profiles", DB.profiles.length], ["Commendations", Object.values(DB.comms).flat().length], ["Report submissions", all.length], ["Awaiting review", queue.length], ["Disputed / appealed", all.filter((r) => ["disputed", "appealed"].includes(r.status)).length], ["Comments pending", DB.pendingComments.length]]
+    body = `<h1 style="font-size:26px">Moderation overview</h1><div class="kpis" style="margin-top:16px">${[["Player profiles", DB.profiles.length], ["Commendations", Object.values(DB.comms).flat().length], ["Community votes", Object.values(DB.votes).reduce((n, v) => n + v.up + v.down, 0)], ["Report submissions", all.length], ["Awaiting review", queue.length], ["Disputed / appealed", all.filter((r) => ["disputed", "appealed"].includes(r.status)).length], ["Commendation comments pending", DB.pendingComments.length]]
+      .concat([["Comments pending", pendingCm.length], ["Comments reported inaccurate", disputes.length]])
       .map(([l, v]) => `<div class="glass pad kpi"><p>${l}</p><p>${v}</p></div>`).join("")}</div>
       <div class="notice" style="margin-top:16px">Staff powers only work in sessions verified with two-factor authentication (administrators need a passkey). Every action is recorded in a tamper-evident log.</div>`;
+  } else if (S.adminView === "comments") {
+    const approved = DB.comments.filter((c) => c.status === "approved");
+    body = `<h1 style="font-size:26px">Player comments awaiting approval</h1><p class="small muted" style="margin-top:4px">Approve only comments about in-game behaviour, with no personal information, slurs, threats or accusations of crimes. Approved comments appear on the player's account.</p>
+      <div class="stack" style="margin-top:12px">${pendingCm.map((c) => `<div class="glass pad small"><span class="chip">${c.tone}</span> on ${esc(profile(c.pid).name)} · by ${esc(c.by)}<p class="subtle" style="margin-top:8px">${esc(c.body)}</p><div class="row" style="margin-top:10px"><button class="btn sm pos" data-cmt="approve" data-cid="${c.id}">Approve and add to account</button><button class="btn sm neg" data-cmt="reject" data-cid="${c.id}">Reject</button></div></div>`).join("") || '<p class="small muted">Queue empty. Leave a comment as a Plus member to see it arrive here.</p>'}</div>
+      <h3 style="margin-top:24px">Comments reported as inaccurate by the account owner</h3><div class="stack" style="margin-top:10px">${disputes.map((c) => `<div class="glass pad small">Comment on ${esc(profile(c.pid).name)}<p class="lbl" style="margin-top:10px">Comment</p><p class="subtle">${esc(c.body)}</p><p class="lbl" style="margin-top:10px">Owner's reason</p><p class="subtle">${esc(c.disputeReason)}</p><div class="row" style="margin-top:10px"><button class="btn sm neg" data-dsp="remove" data-cid="${c.id}">Remove comment</button><button class="btn sm" data-dsp="keep" data-cid="${c.id}">Keep comment</button></div></div>`).join("") || '<p class="small muted">No open reports. As the Profile owner, open Shadow → Comments and press "Report as inaccurate".</p>'}</div>
+      <h3 style="margin-top:24px">Approved comments</h3><div class="stack" style="margin-top:10px">${approved.map((c) => `<div class="glass pad small">${esc(profile(c.pid).name)} · ${c.tone}<p class="muted" style="margin-top:6px">${esc(c.body)}</p><div style="margin-top:8px"><button class="btn sm neg" data-cmt="remove" data-cid="${c.id}">Remove from account</button></div></div>`).join("")}</div>`;
   } else if (S.adminView === "reports") {
     body = `<h1 style="font-size:26px">Reports awaiting review</h1><div class="stack" style="margin-top:14px">${queue.length ? queue.map((r) => `<button class="glass result" data-rid="${r.id}">${statusChip(r.status, true)}<code class="small">${r.ref}</code><span class="small">${REP_CATS[r.cat]} · ${esc(profile(r.pid).name)}</span>${r.flags.map((f) => `<span class="chip warn">${f}</span>`).join("")}<span class="tiny muted" style="margin-left:auto">${r.evidence} file(s)</span></button>`).join("") : '<p class="muted">Queue empty. Submit a report as a Free member to see it arrive here.</p>'}</div>`;
   } else if (S.adminView === "report") {
@@ -506,15 +539,15 @@ function commendModal() {
   if (!signedIn()) return needSignIn();
   const p = profile(S.pid); let cat = "excellent_teammate";
   modal("Give a commendation", `<div class="stack"><p class="lbl">What stood out?</p><div class="cat-grid">${Object.entries(COMM_CATS).map(([k, v]) => `<button class="cat" data-cat="${k}" aria-pressed="${k === cat}">${v}</button>`).join("")}</div>
-    <label class="field"><span class="lbl">Comment (optional)</span><textarea class="input" id="cm" rows="3" maxlength="500" placeholder="Great shot-calling and kept the team positive."></textarea></label>
-    <p class="tiny muted">Comments are checked by a moderator. Don't include personal information.</p>
+    ${isPlus() ? `<label class="field"><span class="lbl">Comment (optional)</span><textarea class="input" id="cm" rows="3" maxlength="500" placeholder="Great shot-calling and kept the team positive."></textarea></label>
+    <p class="tiny muted">Comments are checked by a moderator. Don't include personal information.</p>` : '<p class="tiny muted">Want to add a written comment? That\'s a ServerSentry Plus feature.</p>'}
     <button class="btn pos" id="cmsend">Submit commendation</button></div>`, (m) => {
     m.querySelectorAll(".cat").forEach((b) => b.addEventListener("click", () => { cat = b.dataset.cat; m.querySelectorAll(".cat").forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
     m.querySelector("#cmsend").addEventListener("click", () => {
       const key = `${S.role}:${p.id}:${cat}`;
       if (S.given.has(key)) { toast("You've already given this player that commendation."); return; }
       S.given.add(key);
-      const comment = m.querySelector("#cm").value.trim();
+      const comment = m.querySelector("#cm")?.value.trim() ?? "";
       if (comment) { DB.pendingComments.push({ id: ++seq, pid: p.id, cat, comment, by: NAMES[S.role] }); closeModal(); toast("Thanks! Your commendation counts once a moderator approves the comment."); }
       else { (DB.comms[p.id] ??= []).unshift(C(cat, null, 0)); closeModal(); toast("Thanks! Your commendation is live."); }
       render();
@@ -542,8 +575,27 @@ function reportModal() {
     });
   });
 }
-function upgradeModal() {
-  modal("Stripe Checkout (simulated)", `<div class="stack"><div class="subtle"><p class="small muted">ServerSentry Plus</p><p style="font-family:var(--display);font-size:28px">£0.99 <span class="small muted">per month</span></p></div>
+function commentModal() {
+  if (!signedIn()) return needSignIn();
+  if (!isPlus()) return upgradeModal("Writing comments is a ServerSentry Plus feature.");
+  const p = profile(S.pid);
+  if (S.commented.has(`${S.role}:${p.id}`)) { toast("You've commented on this player recently. You can comment again after 7 days."); return; }
+  let tone = "positive";
+  modal("Leave a comment", `<form class="stack" id="cf"><p class="lbl">Overall tone</p><div class="cat-grid" style="grid-template-columns:repeat(3,1fr)">${["positive", "neutral", "negative"].map((t) => `<button type="button" class="cat" data-tone="${t}" aria-pressed="${t === tone}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div>
+    <label class="field"><span class="lbl">Your comment</span><textarea class="input" id="ct" rows="5" maxlength="1000" placeholder="Describe your experience playing with or against this player."></textarea></label>
+    <p class="tiny muted">Stick to in-game behaviour you saw. No personal information, insults or accusations of crimes. A moderator checks every comment before it appears.</p>
+    <p class="tiny" id="ce" style="color:var(--neg)"></p><button class="btn primary" type="submit">Submit for moderation</button></form>`, (m) => {
+    m.querySelectorAll("[data-tone]").forEach((b) => b.addEventListener("click", () => { tone = b.dataset.tone; m.querySelectorAll("[data-tone]").forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+    m.querySelector("#cf").addEventListener("submit", (e) => {
+      e.preventDefault(); const body = m.querySelector("#ct").value.trim();
+      if (body.length < 10) { m.querySelector("#ce").textContent = "Please write at least 10 characters."; return; }
+      DB.comments.push({ id: ++seq, pid: p.id, tone, body, status: "pending", days: 0, by: NAMES[S.role] }); S.commented.add(`${S.role}:${p.id}`);
+      closeModal(); render(); toast("Comment sent for moderation. Switch to Moderator to approve it.");
+    });
+  });
+}
+function upgradeModal(why) {
+  modal("Stripe Checkout (simulated)", `<div class="stack">${typeof why === "string" ? `<div class="notice">${why}</div>` : ""}<div class="subtle"><p class="small muted">ServerSentry Plus</p><p style="font-family:var(--display);font-size:28px">£0.99 <span class="small muted">per month</span></p></div>
     <p class="small muted">In the real app this is Stripe's secure hosted checkout. ServerSentry never sees card numbers. Access is granted only after Stripe confirms payment.</p>
     <button class="btn primary" id="pay">Pay £0.99 (test)</button></div>`, (m) => m.querySelector("#pay").addEventListener("click", () => { S.upgraded = true; closeModal(); render(); toast("Welcome to ServerSentry Plus! Feedback is now unlocked."); }));
 }
@@ -564,6 +616,23 @@ document.addEventListener("click", (e) => {
   if (ds.act === "commend") return commendModal();
   if (ds.act === "report") return reportModal();
   if (ds.act === "upgrade") return upgradeModal();
+  if (ds.act === "comment") return commentModal();
+  if (ds.vote) {
+    const p = profile(S.pid), key = `${S.role}:${p.id}`, val = +ds.vote, prev = S.myVotes[key] ?? 0, v = DB.votes[p.id];
+    if (prev === 1) v.up--; if (prev === -1) v.down--;
+    const next = prev === val ? 0 : val; if (next === 1) v.up++; if (next === -1) v.down++;
+    S.myVotes[key] = next; render(); toast(next === 0 ? "Vote removed." : next === 1 ? "Upvoted." : "Downvoted."); return;
+  }
+  if (ds.dispute) { const c = DB.comments.find((x) => x.id === +ds.dispute); return textModal("Report comment as inaccurate", "Why is this comment inaccurate?", 10, (v) => { c.dispute = "open"; c.disputeReason = v; toast("Sent to moderators. Switch to Moderator to review it."); }, "Explain what is wrong."); }
+  if (ds.cmt) {
+    const c = DB.comments.find((x) => x.id === +ds.cid);
+    if (ds.cmt === "approve") { c.status = "approved"; logMod("Approved comment and added to account", profile(c.pid).name); render(); toast("Comment approved: it now appears on the player's account."); return; }
+    return textModal(ds.cmt === "reject" ? "Reject comment" : "Remove comment from account", "Reason (recorded)", 5, () => { c.status = ds.cmt === "reject" ? "rejected" : "removed"; logMod(ds.cmt === "reject" ? "Rejected comment" : "Removed comment", profile(c.pid).name); toast(ds.cmt === "reject" ? "Comment rejected." : "Comment removed from the account."); });
+  }
+  if (ds.dsp) {
+    const c = DB.comments.find((x) => x.id === +ds.cid);
+    return textModal(ds.dsp === "remove" ? "Remove disputed comment" : "Keep comment", "Reason (shown to the account owner)", 5, () => { if (ds.dsp === "remove") { c.status = "removed"; c.dispute = "removed"; } else c.dispute = "kept"; logMod(ds.dsp === "remove" ? "Upheld inaccuracy report: comment removed" : "Inaccuracy report reviewed: comment kept", profile(c.pid).name); toast(ds.dsp === "remove" ? "Comment removed. The owner has been notified." : "Comment kept. The owner has been notified."); });
+  }
   if (ds.act === "claim") { toast("Claim submitted. Ownership is never granted on a matching username; Steam uses its official sign-in, other platforms are reviewed by a moderator."); return; }
   if (ds.respond) { const r = DB.reports.find((x) => x.id === +ds.respond); return textModal("Your public response", "Response (moderated before display)", 10, (v) => { r.response = v; r.responseStatus = "pending"; toast("Response sent for moderation."); }); }
   if (ds.appeal) { const r = DB.reports.find((x) => x.id === +ds.appeal); return textModal("Appeal this report", "Grounds for appeal (private to moderators)", 20, (v) => { r.appeal = v; r.status = "appealed"; toast("Appeal submitted. A senior moderator who didn't publish it will decide."); }); }
