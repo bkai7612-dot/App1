@@ -19,6 +19,11 @@
 6. The secret scanner flagged Next's internal dev chunks → it scans source and `.next/static` only.
 7. All the independent QA round 1 findings (QA-01 to QA-08, L-1 to L-7): see TESTING_REPORT.md.
 
+## Package C: moderator tooling (from the user-testing round)
+- Migration 013: claim timestamps, reply timestamps, reporter network hash, appeal questions.
+- Report detail rebuilt: claim/release/take over, publication form with live public preview and safety checklist, reason templates, player-facing vs internal fields, internal notes, appeal questions, staff-only signals, evidence thumbnails.
+- Reports list: per-player filter, assignee and claim age, "reply received", relative times. Queues split into tabs with counts, bulk selection, commendation submitter context, "My recent decisions" with undo. Overview counters link to their lists. User records show notes, actions and the user's submissions.
+
 ## Outstanding
 - Live verification of Stripe, Steam, Supabase Storage, Resend and passkeys on the production domain.
 - Additional platform integrations (Riot RSO, Xbox) subject to approval.

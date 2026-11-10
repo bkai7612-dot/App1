@@ -258,16 +258,16 @@ async function NegativeList({ profileId, ownerUserId, plus, full, identity, clai
   profileId: string; ownerUserId: string | null; plus: boolean; full: boolean; identity: string; claimed: boolean; returnTo: string; signedIn: boolean;
 }) {
   const items = await getPublicReports(profileId);
-  let ownerState: Record<string, { response: string | null; response_body: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null; response_id: string | null }> = {};
+  let ownerState: Record<string, { response: string | null; response_body: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null; response_id: string | null; appeal_q: string | null; appeal_reply: string | null }> = {};
   let closed: { id: string; public_ref: string; category: string; status: string; outcome_type: string | null; outcome_note: string | null; closed_at: Date | null }[] = [];
   if (ownerUserId) {
-    const rows = await withDb(SYSTEM, (tx) => tx.q<{ report_id: string; response: string | null; response_body: string | null; response_id: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null }>(
+    const rows = await withDb(SYSTEM, (tx) => tx.q<{ report_id: string; response: string | null; response_body: string | null; response_id: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null; appeal_q: string | null; appeal_reply: string | null }>(
       `SELECT r.id AS report_id,
          x.status AS response, x.body AS response_body, x.id AS response_id,
-         a.status AS appeal, a.id AS appeal_id, a.decision_note AS appeal_note
+         a.status AS appeal, a.id AS appeal_id, a.decision_note AS appeal_note, a.info_request_note AS appeal_q, a.info_reply AS appeal_reply
        FROM public_reports r
        LEFT JOIN LATERAL (SELECT id, status, body FROM report_responses x WHERE x.report_id = r.id AND x.author_user_id = $2 AND x.status <> 'withdrawn' ORDER BY created_at DESC LIMIT 1) x ON true
-       LEFT JOIN LATERAL (SELECT id, status, decision_note FROM report_appeals a WHERE a.report_id = r.id AND a.appellant_user_id = $2 AND a.status <> 'withdrawn' ORDER BY created_at DESC LIMIT 1) a ON true
+       LEFT JOIN LATERAL (SELECT id, status, decision_note, info_request_note, info_reply FROM report_appeals a WHERE a.report_id = r.id AND a.appellant_user_id = $2 AND a.status <> 'withdrawn' ORDER BY created_at DESC LIMIT 1) a ON true
        WHERE r.player_profile_id = $1`, [profileId, ownerUserId]));
     ownerState = Object.fromEntries(rows.map((r) => [r.report_id, r]));
     // T-06: owners also see reports that were removed or not upheld, with the reason.

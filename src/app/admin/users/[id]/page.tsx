@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { requirePageAuth } from "@/lib/server/page-auth";
 import { withDb } from "@/lib/db";
 import { assignableRoles, can, ROLE_LABELS, type Role } from "@/lib/rbac";
+import Link from "next/link";
 import { AdminAction } from "@/components/admin/AdminAction";
+import { ago } from "@/lib/time";
 
 const dt = (d: Date | null) => (d ? new Date(d).toLocaleString("en-GB") : "—");
 
@@ -21,7 +23,16 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
     const events = can(auth.user.role, "audit.view") ? await tx.q<{ event_type: string; created_at: Date }>(`SELECT event_type, created_at FROM security_events WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30`, [id]) : [];
     const modHistory = await tx.q<{ action: string; created_at: Date; target_type: string }>(
       `SELECT action, created_at, target_type FROM moderation_actions WHERE moderator_id = $1 ORDER BY created_at DESC LIMIT 30`, [id]);
-    return { u, stats, events, modHistory };
+    const about = await tx.q<{ action: string; note: string | null; created_at: Date; moderator: string | null }>(
+      `SELECT m.action, m.note, m.created_at, x.display_name AS moderator FROM moderation_actions m LEFT JOIN users x ON x.id = m.moderator_id
+       WHERE m.target_type = 'user' AND m.target_id = $1 ORDER BY m.created_at DESC LIMIT 50`, [id]);
+    const reports = await tx.q<{ id: string; public_ref: string; status: string; created_at: Date; player: string }>(
+      `SELECT r.id, r.public_ref, r.status, r.created_at, p.display_name AS player FROM reports r JOIN player_profiles p ON p.id = r.player_profile_id WHERE r.reporter_user_id = $1 ORDER BY r.created_at DESC LIMIT 25`, [id]);
+    const comms = await tx.q<{ id: string; category: string; status: string; created_at: Date; player: string; public_id: string }>(
+      `SELECT c.id, c.category, c.status, c.created_at, p.display_name AS player, p.public_id FROM commendations c JOIN player_profiles p ON p.id = c.player_profile_id WHERE c.submitter_user_id = $1 ORDER BY c.created_at DESC LIMIT 25`, [id]);
+    const comments = await tx.q<{ id: string; body: string; status: string; created_at: Date; player: string; public_id: string }>(
+      `SELECT c.id, c.body, c.status, c.created_at, p.display_name AS player, p.public_id FROM player_comments c JOIN player_profiles p ON p.id = c.player_profile_id WHERE c.author_user_id = $1 ORDER BY c.created_at DESC LIMIT 25`, [id]);
+    return { u, stats, events, modHistory, about, reports, comms, comments };
   });
   if (!d) notFound();
   const { u } = d;
@@ -56,6 +67,20 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
           )}
         </section>
       )}
+      <section className="glass p-6 text-sm">
+        <h2 className="font-display font-semibold">Notes and actions about this user</h2>
+        <p className="mt-1 text-xs text-text-muted">Staff only. Never shown to the user.</p>
+        {d.about.length === 0 ? <p className="mt-2 text-text-muted">Nothing recorded yet.</p> : <ul className="mt-2 space-y-2">{d.about.map((m, i) => <li key={i} className="border-l-2 border-violet-brand/40 pl-3"><span className="font-medium">{m.action.replace(/_/g, " ")}</span> · {m.moderator ?? "system"} · <span className="text-text-muted" title={dt(m.created_at)}>{ago(m.created_at)}</span>{m.note && <p className="text-text-muted">{m.note}</p>}</li>)}</ul>}
+        {!self && <div className="mt-3"><AdminAction endpoint={ep} base={{ action: "add_note" }} label="Add internal note" fields={[{ name: "reason", label: "Note", type: "textarea", required: true, min: 3, max: 2000, audience: "internal" }]} /></div>}
+      </section>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="glass p-5 text-sm"><h2 className="font-display font-semibold">Reports submitted</h2>
+          {d.reports.length === 0 ? <p className="mt-2 text-text-muted">None.</p> : <ul className="mt-2 space-y-1">{d.reports.map((r) => <li key={r.id}><Link className="underline" href={`/admin/reports/${r.id}`}>{r.public_ref}</Link> · {r.player} · <span className="text-text-muted">{r.status.replace("_", " ")} · {ago(r.created_at)}</span></li>)}</ul>}</div>
+        <div className="glass p-5 text-sm"><h2 className="font-display font-semibold">Commendations given</h2>
+          {d.comms.length === 0 ? <p className="mt-2 text-text-muted">None.</p> : <ul className="mt-2 space-y-1">{d.comms.map((c) => <li key={c.id}><Link className="underline" href={`/players/${c.public_id}?tab=positive`}>{c.player}</Link> · {c.category.replace(/_/g, " ")} · <span className="text-text-muted">{c.status} · {ago(c.created_at)}</span></li>)}</ul>}</div>
+        <div className="glass p-5 text-sm"><h2 className="font-display font-semibold">Comments written</h2>
+          {d.comments.length === 0 ? <p className="mt-2 text-text-muted">None.</p> : <ul className="mt-2 space-y-1">{d.comments.map((c) => <li key={c.id}><Link className="underline" href={`/players/${c.public_id}?tab=comments`}>{c.player}</Link> · <span className="text-text-muted">{c.status} · {ago(c.created_at)}</span><p className="truncate text-text-muted">{c.body}</p></li>)}</ul>}</div>
+      </section>
       {d.modHistory.length > 0 && <section className="glass p-6 text-sm"><h2 className="font-display font-semibold">Moderation actions performed</h2><ul className="mt-2 space-y-1 text-text-muted">{d.modHistory.map((m, i) => <li key={i}>{m.action} on {m.target_type} · {dt(m.created_at)}</li>)}</ul></section>}
       {d.events.length > 0 && <section className="glass p-6 text-sm"><h2 className="font-display font-semibold">Security events</h2><ul className="mt-2 space-y-1 text-text-muted">{d.events.map((e, i) => <li key={i}>{e.event_type.replace(/_/g, " ")} · {dt(e.created_at)}</li>)}</ul></section>}
     </div>

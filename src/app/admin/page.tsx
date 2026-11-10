@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePageAuth } from "@/lib/server/page-auth";
 import { withDb } from "@/lib/db";
 import { can } from "@/lib/rbac";
@@ -28,16 +29,23 @@ export default async function AdminHome() {
   const subs = can(auth.user.role, "billing.view")
     ? await withDb(auth.db, (tx) => tx.one<{ n: string }>(`SELECT count(*) AS n FROM subscriptions WHERE status IN ('active','trialing') AND current_period_end > now()`))
     : null;
-  const cards: [string, string | undefined][] = [
-    ["Registered users", s?.users], ["Player profiles", s?.profiles], ["Commendations", s?.commendations], ["Report submissions", s?.reports],
-    ["Reports awaiting review", s?.awaiting], ["Disputed / appealed", s?.disputed], ["Open appeals", s?.appeals], ["Active subscriptions", subs?.n ?? "—"],
-    ["Commendation comments pending", s?.pending_comm], ["Ownership claims pending", s?.pending_ver], ["Player responses pending", s?.pending_resp], ["Comments awaiting approval", s?.pending_comments], ["Comments reported inaccurate", s?.open_disputes], ["Community votes", s?.votes],
+  const users = can(auth.user.role, "users.view") ? "/admin/users" : undefined;
+  const ver = can(auth.user.role, "mod.verifications.review") ? "/admin/queue?tab=verifications" : undefined;
+  // M-10: each counter links to the list behind it.
+  const cards: [string, string | undefined, string | undefined][] = [
+    ["Reports awaiting review", s?.awaiting, "/admin/reports?f=queue"], ["Disputed / appealed", s?.disputed, "/admin/reports?f=disputed"], ["Open appeals", s?.appeals, "/admin/queue?tab=appeals"], ["Comments awaiting approval", s?.pending_comments, "/admin/queue?tab=comments"],
+    ["Comments reported inaccurate", s?.open_disputes, "/admin/queue?tab=disputes"], ["Commendation comments pending", s?.pending_comm, "/admin/queue?tab=commendations"], ["Ownership claims pending", s?.pending_ver, ver], ["Player responses pending", s?.pending_resp, "/admin/queue?tab=responses"],
+    ["Registered users", s?.users, users], ["Player profiles", s?.profiles, undefined], ["Commendations", s?.commendations, undefined], ["Report submissions", s?.reports, "/admin/reports?f=all"],
+    ["Active subscriptions", subs?.n ?? "—", undefined], ["Community votes", s?.votes, undefined],
   ];
   return (
     <div>
       <h1 className="font-display text-2xl font-semibold">Moderation overview</h1>
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([l, v]) => <div key={l} className="glass p-5"><p className="text-xs uppercase tracking-wider text-text-muted">{l}</p><p className="mt-1 font-display text-2xl font-semibold">{v ?? "0"}</p></div>)}
+        {cards.map(([l, v, href]) => {
+          const inner = <><p className="text-xs uppercase tracking-wider text-text-muted">{l}</p><p className="mt-1 font-display text-2xl font-semibold">{v ?? "0"}</p></>;
+          return href ? <Link key={l} href={href} className="glass block p-5 hover:shadow-glow">{inner}</Link> : <div key={l} className="glass p-5">{inner}</div>;
+        })}
       </div>
       <section className="glass mt-8 p-6">
         <h2 className="font-display text-lg font-semibold">Vote activity alerts <span className="text-sm font-normal text-text-muted">· last 24 hours, 5+ votes on one player</span></h2>

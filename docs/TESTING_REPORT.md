@@ -5,7 +5,7 @@
 | Layer | How | Result |
 |---|---|---|
 | Unit | `npm test`: TOTP RFC 4226 vectors, replay, open-redirect guard, RBAC matrix | 7/7 pass |
-| Developer integration & security | `npm run test:security`: real HTTP against the running app plus direct SQL attacks as the app role | **141/141 pass** |
+| Developer integration & security | `npm run test:security`: real HTTP against the running app plus direct SQL attacks as the app role | **247/247 pass** |
 | Independent QA, round 1 | Separate tester agent: black-box HTTP, code review, DB-role attacks, Playwright at 390px | 0 Critical, 0 High, **8 Medium**, ~14 Low/Info |
 | Independent QA, round 2 (retest) | Same tester re-verifying the fixes | All passed except the QA-08 bypass and part of L-7, both fixed and covered by tests (round 3 below) |
 | Build & supply chain | `next build`, `tsc`, `npm audit --omit=dev`, `npm run scan:secrets` | Pass; 0 production advisories |
@@ -35,6 +35,12 @@
 - **RLS (direct SQL as `serversentry_app`):** no cross-user reads; role, subscription and status forging blocked; public views are column-safe and read-only; the audit log is immutable even for staff; MFA secrets, evidence and sessions are isolated; users can't rewrite sessions; staff can't publish their own responses; admins can't restrict admins; seniors can't rename users; users can't forge verification proofs; the audit chain is intact.
 - **Stripe webhooks:** unsigned or missing signatures rejected; signed events accepted; replay ignored; out-of-order events ignored; past_due and cancel remove access; metadata spoofing grants nothing.
 - **Rate limits** and **session management:** revoke others, logout, can't revoke other users' sessions.
+
+## User-testing round (5 gamer agents, 1 moderator agent, manager) — fixes
+The owner approved packages A–E from the manager's report. Tests added per package (suite total now **247 passing, 0 failing** on a freshly reset database):
+- **A, fix now:** claim lockout (I-01), login limits count failures only, password change requires current password, sessions view.
+- **B, trust and fairness:** 72-hour hold on new-account votes plus spike alert (D3), report status free for everyone with summaries in Plus (D1), unreviewed counts only for owner/staff (D2), withdraw response/appeal, profile-code check with "I've placed the code", how-verified badge.
+- **C, moderator tools:** report claim/lock with take-over reason (409 when someone else holds it), publication checklist enforced server-side (422 until acknowledged), separate player-facing and internal reasons (internal notes never reach players), questions to reporters and appellants with replies, duplicate-text and same-network reporter signals (staff-only), bulk approve/reject, 10-minute undo of your own decisions, internal notes and history on user records.
 
 ## Independent QA round 1: findings and fixes
 

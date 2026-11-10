@@ -337,9 +337,9 @@ await relogin(M);
   check("Moderator starts review", (await M.c.post(`/api/admin/reports/${reportA}`, { action: "start_review" })).status === 200);
   const s2 = await M.c.post(`/api/admin/reports/${reportA}`, { action: "publish", publicSummary: "short" });
   check("Public summary required (min length)", s2.status === 400);
-  const pub = await M.c.post(`/api/admin/reports/${reportA}`, { action: "publish", publicSummary: "A community member alleges insulting messages in team chat after a round." });
+  const pub = await M.c.post(`/api/admin/reports/${reportA}`, { action: "publish", publicSummary: "A community member alleges insulting messages in team chat after a round.", acknowledgeWarnings: true });
   check("Moderator publishes after review", pub.status === 200);
-  const rem = await M.c.post(`/api/admin/reports/${reportA}`, { action: "remove", note: "testing removal permissions" });
+  const rem = await M.c.post(`/api/admin/reports/${reportA}`, { action: "remove", playerNote: "testing removal permissions" });
   check("Junior moderator cannot remove published content", rem.status === 403);
   const audit = await M.c.get("/admin/audit");
   check("Moderator cannot view audit log", audit.status === 404);
@@ -362,7 +362,7 @@ await relogin(M);
   const before = await C.c.get(`/api/players/${ownedProfile.public_id}/feedback?type=reports`);
   check("Owner does not see unpublished reports", before.status === 200 && before.json.reports.length === 0);
   await M.c.post(`/api/admin/reports/${ownerReport}`, { action: "start_review" });
-  await M.c.post(`/api/admin/reports/${ownerReport}`, { action: "publish", publicSummary: "A community member alleges repeated taunting of opponents during a match." });
+  await M.c.post(`/api/admin/reports/${ownerReport}`, { action: "publish", publicSummary: "A community member alleges repeated taunting of opponents during a match.", acknowledgeWarnings: true });
   const after = await C.c.get(`/api/players/${ownedProfile.public_id}/feedback?type=reports`);
   check("Owner sees published report about them WITHOUT Plus", after.status === 200 && after.json.reports.length === 1);
   check("Owner view hides reporter identity", !after.text.includes(A.id) && !after.text.includes(A.name));
@@ -380,8 +380,81 @@ await relogin(M);
   check("T-07: owner can withdraw a pending response", (await C.c.post(`/api/reports/${ownerReport}/response/withdraw`, {})).status === 200);
   const appealId = (await db.query(`SELECT id FROM report_appeals WHERE report_id = $1`, [ownerReport])).rows[0].id;
   check("Junior moderator cannot decide appeals", (await M.c.post(`/api/admin/appeals/${appealId}`, { decision: "upheld", note: "Looks right to me" })).status === 403);
-  const pay = await C.c.post(`/api/admin/reports/${ownerReport}`, { action: "remove", note: "I paid" });
+  const pay = await C.c.post(`/api/admin/reports/${ownerReport}`, { action: "remove", playerNote: "I paid" });
   check("Profile owner cannot remove reports", pay.status === 403);
+}
+
+section("Moderator tooling: claims, publication checklist, bulk, undo, questions");
+{
+  const M2 = await makeUser("mod2");
+  execFileSync("node", ["scripts/bootstrap-admin.mjs", M2.email, "moderator"]);
+  await relogin(M2);
+  const S = await makeUser("senior");
+  execFileSync("node", ["scripts/bootstrap-admin.mjs", S.email, "senior_moderator"]);
+  await relogin(S);
+  const R = await makeUser("rep2"), R2 = await makeUser("rep3");
+  const desc = "Kept blocking our spawn exit for the whole round on purpose, every single round.";
+  const mk = (who) => { const f = new FormData(); f.set("playerProfileId", shadow.id); f.set("category", "griefing"); f.set("description", desc); f.set("incidentDate", "2026-11-03"); f.set("accurateConfirm", "true"); return who.c.post("/api/reports", f); };
+  const rr = await mk(R);
+  check("Second reporter can submit", rr.status === 200, rr.text);
+  const rid = rr.json?.reportId;
+  const rr2 = await mk(R2);
+  const fl = (await db.query(`SELECT flags FROM reports WHERE id = $1`, [rr2.json?.reportId])).rows[0]?.flags ?? [];
+  check("M-05: near-identical text from another reporter is flagged", fl.includes("duplicate_text"), JSON.stringify(fl));
+  check("M-05: staff-only flags are not returned to the reporter", !JSON.stringify(rr2.json).includes("duplicate_text"));
+  const ep = `/api/admin/reports/${rid}`;
+  check("M-03: starting review claims the report", (await M.c.post(ep, { action: "start_review" })).status === 200);
+  check("M-03: another moderator can't decide a claimed report (409)", (await M2.c.post(ep, { action: "reject", playerNote: "Not enough detail here." })).status === 409);
+  check("M-03: another moderator can't claim it either", (await M2.c.post(ep, { action: "claim" })).status === 409);
+  check("M-03: taking over requires a reason", (await M2.c.post(ep, { action: "take_over" })).status === 400);
+  check("M-03: take over with a reason", (await M2.c.post(ep, { action: "take_over", note: "Original moderator is off shift." })).status === 200);
+  check("M-03: original moderator is now locked out", (await M.c.post(ep, { action: "request_info", note: "Can you share the match ID please?" })).status === 409);
+  const w = await M2.c.post(ep, { action: "publish", publicSummary: "This player is a griefer who ruins every match for everyone." });
+  check("M-02: risky summary needs checklist acknowledgement (422)", w.status === 422 && w.json?.error?.warnings?.length > 0, w.text);
+  check("M-02: report stays unpublished after a refused publish", (await db.query(`SELECT status FROM reports WHERE id = $1`, [rid])).rows[0].status === "under_review");
+  check("M-06: rejecting needs a player-facing reason", (await M2.c.post(ep, { action: "reject", note: "internal only" })).status === 400);
+  check("M-11: moderator asks the reporter a question", (await M2.c.post(ep, { action: "request_info", note: "Can you share the match ID or the time of the match?", internalNote: "Checking spawn-block pattern" })).status === 200);
+  check("M-11: reporter answers", (await R.c.post(`/api/reports/${rid}/info`, { text: "Match ID 5521-9917, around 21:40 on 3 November." })).status === 200);
+  check("M-11: reply time is recorded", !!(await db.query(`SELECT info_replied_at FROM reports WHERE id = $1`, [rid])).rows[0].info_replied_at);
+  check("M-06: internal note added", (await M2.c.post(ep, { action: "add_note", note: "Match ID checks out against the description." })).status === 200);
+  const rej = await M2.c.post(ep, { action: "reject", playerNote: "We couldn't verify this report from the information provided.", note: "SECRET-INTERNAL-REASONING" });
+  check("M-06: reject with player reason and internal note", rej.status === 200, rej.text);
+  const rn = await R.c.get("/api/notifications");
+  check("M-06: reporter is told the player-facing reason", JSON.stringify(rn.json).includes("couldn't verify this report"));
+  check("M-06: internal note never reaches the reporter", !JSON.stringify(rn.json).includes("SECRET-INTERNAL"));
+  const hist = (await db.query(`SELECT note FROM moderation_actions WHERE target_id = $1 AND action = 'reject'`, [rid])).rows[0]?.note ?? "";
+  check("M-06: history keeps both, labelled", /Told player:/.test(hist) && /Internal: SECRET/.test(hist));
+  check("Staff report page renders", (await M2.c.get(`/admin/reports/${rid}`)).status === 200);
+  check("Queue tabs render", (await M.c.get("/admin/queue?tab=recent")).status === 200 && (await M.c.get("/admin/queue?tab=commendations")).status === 200);
+
+  // Bulk + undo on commendations held for new accounts.
+  const c1 = await R.c.post("/api/commendations", { playerProfileId: shadow.id, category: "fair_play" });
+  const c2 = await R2.c.post("/api/commendations", { playerProfileId: shadow.id, category: "fair_play" });
+  const ids = [c1.json?.id, c2.json?.id].filter(Boolean);
+  check("New-account commendations are held for review", c1.json?.status === "pending" && c2.json?.status === "pending", `${c1.json?.status} ${c2.json?.status}`);
+  check("M-04: members cannot use bulk moderation", (await R.c.post("/api/admin/bulk", { kind: "commendation", ids, decision: "approve" })).status === 403);
+  check("M-04: bulk reject needs a reason", (await M.c.post("/api/admin/bulk", { kind: "commendation", ids, decision: "reject" })).status === 400);
+  const bulk = await M.c.post("/api/admin/bulk", { kind: "commendation", ids, decision: "approve" });
+  check("M-04: bulk approve", bulk.status === 200 && bulk.json.done === ids.length, bulk.text);
+  const again = await M.c.post("/api/admin/bulk", { kind: "commendation", ids, decision: "approve" });
+  check("M-04: already-handled items are skipped", again.json?.skipped === ids.length);
+  check("M-08: another moderator can't undo your decision", (await M2.c.post(`/api/admin/commendations/${ids[0]}`, { decision: "undo" })).status === 400);
+  check("M-08: undo your own decision", (await M.c.post(`/api/admin/commendations/${ids[0]}`, { decision: "undo" })).status === 200);
+  check("M-08: undone item is back in the queue", (await db.query(`SELECT status FROM commendations WHERE id = $1`, [ids[0]])).rows[0].status === "pending");
+
+  // Appeal questions.
+  const appealId = (await db.query(`SELECT id FROM report_appeals WHERE report_id = $1 AND status = 'submitted'`, [ownerReport])).rows[0]?.id;
+  check("M-11: junior moderator can't question appellants", (await M2.c.post(`/api/admin/appeals/${appealId}`, { decision: "request_info", note: "Which match was this exactly?" })).status === 403);
+  check("M-11: senior moderator asks the appellant", (await S.c.post(`/api/admin/appeals/${appealId}`, { decision: "request_info", note: "Can you share the match ID you mentioned?" })).status === 200);
+  check("M-11: only the appellant can answer", (await B.c.post(`/api/reports/${ownerReport}/appeal/info`, { text: "Not my appeal but here is an answer." })).status === 400);
+  check("M-11: appellant answers", (await C.c.post(`/api/reports/${ownerReport}/appeal/info`, { text: "The match ID is 4471-2290-88." })).status === 200);
+  check("M-11: can't answer twice", (await C.c.post(`/api/reports/${ownerReport}/appeal/info`, { text: "A second answer to the same question." })).status === 400);
+
+  // M-13: notes about a user.
+  check("M-13: moderator adds an internal note about a user", (await S.c.post(`/api/admin/users/${R.id}`, { action: "add_note", reason: "Reported the same player twice in an hour." })).status === 200);
+  check("M-13: note is kept in the user's history", (await db.query(`SELECT count(*)::int AS n FROM moderation_actions WHERE target_type = 'user' AND target_id = $1 AND action = 'add_note'`, [R.id])).rows[0].n === 1);
+  check("M-13: members can't add notes", (await R2.c.post(`/api/admin/users/${R.id}`, { action: "add_note", reason: "sneaky" })).status === 403);
+  check("M-13: user page renders with history", (await S.c.get(`/admin/users/${R.id}`)).status === 200);
 }
 
 section("Votes, Plus comments, moderation and owner disputes");

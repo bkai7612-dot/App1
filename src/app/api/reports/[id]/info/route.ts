@@ -16,7 +16,7 @@ export const POST = route({ auth: "mfa", body: Body, rate: { name: "report-info"
   if (!r.info_requested_at || r.status !== "under_review") throw badRequest("No information was requested for this report.");
   await withDb(SYSTEM, async (tx) => {
     await tx.q(`INSERT INTO moderation_actions (moderator_id, target_type, target_id, action, note) VALUES (NULL, 'report', $1, 'reporter_info_supplied', $2)`, [r.id, body.text]);
-    await tx.q(`UPDATE reports SET info_requested_at = NULL WHERE id = $1`, [r.id]);
+    await tx.q(`UPDATE reports SET info_requested_at = NULL, info_replied_at = now() WHERE id = $1`, [r.id]);
     await audit(tx, auth!.user.id, "report.info_supplied", { type: "report", id: r.id }, {}, meta.ipHash);
   });
   return { ok: true };

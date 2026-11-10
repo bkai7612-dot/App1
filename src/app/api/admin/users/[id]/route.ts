@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { route } from "@/lib/server/api";
 import { withDb, SYSTEM } from "@/lib/db";
-import { audit, securityEvent } from "@/lib/server/audit";
+import { audit, moderationAction, securityEvent } from "@/lib/server/audit";
 import { notify } from "@/lib/server/notify";
 import { revokeAllSessions } from "@/lib/auth/session";
 import { assignableRoles, can, ROLES, type Role } from "@/lib/rbac";
@@ -15,9 +15,10 @@ const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("unrestrict_reporting"), reason: z.string().trim().min(5).max(500) }),
   z.object({ action: z.literal("set_role"), role: z.enum(ROLES), reason: z.string().trim().min(5).max(500) }),
   z.object({ action: z.literal("revoke_sessions"), reason: z.string().trim().min(5).max(500) }),
+  z.object({ action: z.literal("add_note"), reason: z.string().trim().min(3).max(2000) }),
 ]);
 
-const PERM = { suspend: "users.suspend", unsuspend: "users.suspend", restrict_reporting: "users.restrict_reporting", unrestrict_reporting: "users.restrict_reporting", set_role: "users.roles.manage", revoke_sessions: "users.suspend" } as const;
+const PERM = { suspend: "users.suspend", unsuspend: "users.suspend", restrict_reporting: "users.restrict_reporting", unrestrict_reporting: "users.restrict_reporting", set_role: "users.roles.manage", revoke_sessions: "users.suspend", add_note: "users.view" } as const;
 
 export const POST = route({ permission: "users.view", body: Body }, async ({ auth, params, body, meta }) => {
   const id = z.string().uuid().safeParse(params.id);
@@ -29,7 +30,7 @@ export const POST = route({ permission: "users.view", body: Body }, async ({ aut
   await withDb(auth!.db, async (tx) => {
     const target = await tx.one<{ id: string; role: Role }>(`SELECT id, role FROM users WHERE id = $1`, [id.data]);
     if (!target) throw notFound();
-    if (target.role !== "user" && body.action !== "set_role") {
+    if (target.role !== "user" && body.action !== "set_role" && body.action !== "add_note") {
       const actor = auth!.user.role;
       const allowed = actor === "super_admin" || (actor === "admin" && (target.role === "moderator" || target.role === "senior_moderator"));
       if (!allowed) throw forbidden("You cannot restrict an account with this role.");
@@ -50,10 +51,14 @@ export const POST = route({ permission: "users.view", body: Body }, async ({ aut
         await tx.q(`UPDATE users SET role = $2 WHERE id = $1`, [target.id, body.role]); // also enforced by DB trigger
         break;
       case "revoke_sessions":
+      case "add_note":
         break;
     }
+    // M-13: every action about a user is also kept in that user's moderation history (staff-only).
+    await moderationAction(tx, auth!.user.id, { type: "user", id: target.id }, body.action, null, null, body.action === "set_role" ? `${target.role} → ${body.role}: ${body.reason}` : body.reason);
     await audit(tx, auth!.user.id, `admin.user.${body.action}`, { type: "user", id: target.id }, { reason: body.reason, ...(body.action === "set_role" ? { from: target.role, to: body.role } : {}) }, meta.ipHash);
   });
+  if (body.action === "add_note") return { ok: true };
   await withDb(SYSTEM, async (tx) => {
     if (["suspend", "set_role", "revoke_sessions"].includes(body.action)) await revokeAllSessions(tx, id.data, `admin_${body.action}`);
     await securityEvent(tx, id.data, `admin_${body.action}`, meta, { by: auth!.user.id });

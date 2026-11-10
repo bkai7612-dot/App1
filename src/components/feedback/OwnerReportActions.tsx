@@ -5,7 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/client";
 import { GateError } from "./MfaGateMessage";
 
-type State = { response: string | null; response_body: string | null; response_id: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null } | null;
+type State = { response: string | null; response_body: string | null; response_id: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null; appeal_q?: string | null; appeal_reply?: string | null } | null;
 const LABEL: Record<string, string> = { pending: "awaiting moderation", published: "published", rejected: "not published", submitted: "submitted", under_review: "under review", upheld: "successful", };
 
 /** Owner's right of reply and appeal: clear confirmations, your own text, and withdraw while pending (T-07). */
@@ -33,6 +33,14 @@ export function OwnerReportActions({ reportId, status, state }: { reportId: stri
     try { await api(`/api/reports/${reportId}/${what}/withdraw`, { body: {} }); setMsg(what === "response" ? "Response withdrawn." : "Appeal withdrawn."); router.refresh(); }
     catch (e) { setErr(e); } finally { setBusy(false); }
   };
+  const [reply, setReply] = useState("");
+  const sendReply = async (e: React.FormEvent) => {
+    e.preventDefault(); setErr(null);
+    if (reply.trim().length < 5) { setErr(new Error("Please write at least 5 characters.")); return; }
+    setBusy(true);
+    try { await api(`/api/reports/${reportId}/appeal/info`, { body: { text: reply } }); setMsg("Thanks. Your answer was sent to the moderator."); setReply(""); router.refresh(); }
+    catch (e) { setErr(e); } finally { setBusy(false); }
+  };
   const canRespond = !state?.response || state.response === "rejected";
   const appealOpen = state?.appeal === "submitted" || state?.appeal === "under_review";
   const canAppeal = status !== "resolved" && !appealOpen && state?.appeal !== "upheld";
@@ -50,6 +58,15 @@ export function OwnerReportActions({ reportId, status, state }: { reportId: stri
         <div className="rounded-lg border border-ink-line bg-white/[0.02] p-3">
           <p className="text-xs uppercase tracking-wider text-text-muted">Your appeal · {LABEL[state.appeal] ?? state.appeal}</p>
           {state.appeal_note && <p className="mt-1 text-text-muted">Moderator&apos;s reason: {state.appeal_note}</p>}
+          {state.appeal_q && (state.appeal === "submitted" || state.appeal === "under_review") && (
+            <div className="mt-2 rounded-lg border border-sky-400/40 bg-sky-400/5 p-3">
+              <p className="text-sky-300">A moderator asked: {state.appeal_q}</p>
+              {state.appeal_reply ? <p className="mt-1 text-text-muted">Your answer: {state.appeal_reply}</p> : (
+                <form onSubmit={sendReply} className="mt-2 space-y-2">
+                  <label className="block"><span className="sr-only">Your answer</span><textarea className="input" rows={3} maxLength={2000} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Your answer" /></label>
+                  <button disabled={busy} className="btn-primary px-3 py-1.5 text-xs">Send answer</button>
+                </form>)}
+            </div>)}
           {state.appeal === "submitted" && <button disabled={busy} onClick={() => withdraw("appeal")} className="btn-ghost mt-2 px-3 py-1 text-xs">Withdraw appeal</button>}
         </div>
       )}

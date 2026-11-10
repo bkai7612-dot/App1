@@ -102,12 +102,24 @@ export async function POST(req: NextRequest) {
         if (Date.now() - me.user.createdAt.getTime() < 7 * 86400_000) flags.push("reporter_account_new");
         const rej = await withDb(SYSTEM, (s) => s.one<{ n: string }>(`SELECT count(*) AS n FROM reports WHERE reporter_user_id = $1 AND status IN ('rejected','removed')`, [me.user.id]));
         if (Number(rej?.n ?? 0) >= 3) flags.push("reporter_many_rejections");
+        // M-05: linked-account / copy-paste signals (staff-only; hashes and similarity, never shown to players).
+        const aliasBase = (e: string) => e.split("@")[0].split("+")[0].replace(/[.\d_-]/g, "");
+        const sig = await withDb(SYSTEM, (s) => s.one<{ dup: boolean; net: boolean; alias: boolean }>(
+          `SELECT coalesce(bool_or(similarity(lower(r.description), lower($2)) >= 0.8), false) AS dup,
+                  coalesce(bool_or(r.reporter_ip_hash = $3), false) AS net,
+                  coalesce(bool_or(length($4) >= 3 AND regexp_replace(split_part(split_part(u.email_normalized, '@', 1), '+', 1), '[.0-9_-]', '', 'g') = $4), false) AS alias
+           FROM reports r LEFT JOIN users u ON u.id = r.reporter_user_id
+           WHERE r.player_profile_id = $1 AND r.created_at > now() - interval '30 days' AND r.reporter_user_id IS DISTINCT FROM $5`,
+          [p.id, f.description, ih, aliasBase(me.user.email.toLowerCase()), me.user.id]));
+        if (sig?.dup) flags.push("duplicate_text");
+        if (sig?.net) flags.push("same_network_as_another_reporter");
+        if (sig?.alias) flags.push("similar_email_to_another_reporter");
 
         const ref = publicId("R", 8);
         const r = await tx.one<{ id: string }>(
-          `INSERT INTO reports (public_ref, player_profile_id, game_id, platform_id, category, description, incident_date, reporter_user_id, flags)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-          [ref, p.id, p.game_id, p.platform_id, f.category, f.description, f.incidentDate, me.user.id, flags]);
+          `INSERT INTO reports (public_ref, player_profile_id, game_id, platform_id, category, description, incident_date, reporter_user_id, flags, reporter_ip_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+          [ref, p.id, p.game_id, p.platform_id, f.category, f.description, f.incidentDate, me.user.id, flags, ih]);
         for (const ev of processed) {
           const key = newStorageKey(ev.mime.split("/")[1]);
           await putObject(key, ev.data, ev.mime);
