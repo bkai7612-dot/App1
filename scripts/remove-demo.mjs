@@ -10,6 +10,8 @@ const users = (await c.query(`SELECT id FROM users WHERE is_demo`)).rows.map((r)
 // report_evidence/responses/appeals cascade from reports; reports & commendations cascade from profiles.
 await c.query(`DELETE FROM reports WHERE is_demo OR player_profile_id = ANY($1::uuid[]) OR reporter_user_id = ANY($2::uuid[])`, [profs, users]);
 await c.query(`DELETE FROM commendations WHERE is_demo OR player_profile_id = ANY($1::uuid[]) OR submitter_user_id = ANY($2::uuid[])`, [profs, users]);
+await c.query(`DELETE FROM player_comments WHERE is_demo OR player_profile_id = ANY($1::uuid[]) OR author_user_id = ANY($2::uuid[])`, [profs, users]);
+await c.query(`DELETE FROM player_votes WHERE is_demo OR player_profile_id = ANY($1::uuid[]) OR voter_user_id = ANY($2::uuid[])`, [profs, users]);
 await c.query(`DELETE FROM gaming_accounts WHERE is_demo OR player_profile_id = ANY($1::uuid[])`, [profs]);
 await c.query(`DELETE FROM account_verifications WHERE player_profile_id = ANY($1::uuid[])`, [profs]);
 await c.query(`DELETE FROM player_profiles WHERE is_demo`);

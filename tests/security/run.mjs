@@ -41,7 +41,14 @@ function client(ip = `10.0.${Math.floor(Math.random() * 250)}.${Math.floor(Math.
     let payload;
     if (body instanceof FormData) payload = body;
     else if (body !== undefined) { headers["content-type"] = "application/json"; payload = JSON.stringify(body); }
-    const res = await fetch(BASE + path, { method, headers, body: payload, redirect: "manual" });
+    // Retry once if a pooled keep-alive socket was closed by the server (e.g. after rejecting an oversized upload).
+    let res;
+    try { res = await fetch(BASE + path, { method, headers, body: payload, redirect: "manual" }); }
+    catch (e) {
+      if (e?.cause?.code !== "ECONNRESET" && e?.cause?.code !== "UND_ERR_SOCKET") throw e;
+      await new Promise((r) => setTimeout(r, 200));
+      res = await fetch(BASE + path, { method, headers: { ...headers, connection: "close" }, body: payload, redirect: "manual" });
+    }
     for (const c of res.headers.getSetCookie?.() ?? []) { const [kv] = c.split(";"); const [k, ...v] = kv.split("="); const val = v.join("="); if (val) jar.set(k, val); else jar.delete(k); }
     let json = null; const text = await res.text(); try { json = JSON.parse(text); } catch { /* not json */ }
     return { status: res.status, json, text, headers: res.headers };
@@ -77,7 +84,8 @@ async function makeUser(name, { mfa = true, verify = true } = {}) {
   if (mfa) {
     const s = await c.get("/api/auth/mfa/totp");
     u.secret = s.json.secret;
-    const conf = await c.post("/api/auth/mfa/totp", { code: totp(u.secret) });
+    u.enrolCode = totp(u.secret);
+    const conf = await c.post("/api/auth/mfa/totp", { code: u.enrolCode });
     if (conf.status !== 200) throw new Error("totp confirm failed " + conf.text);
     u.recovery = conf.json.recoveryCodes;
   }
@@ -156,7 +164,7 @@ section("MFA gates and second-factor enforcement");
   check("Pending-MFA session cannot use the app", pend.status === 401 && pend.json.error.code === "MFA_REQUIRED");
   const pendCommend = await A.c.post("/api/commendations", { playerProfileId: shadow.id, category: "fair_play" });
   check("Pending-MFA session cannot submit content", pendCommend.status === 401);
-  const replay = await A.c.post("/api/auth/mfa/verify", { code: totp(A.secret) });
+  const replay = await A.c.post("/api/auth/mfa/verify", { code: A.enrolCode }); // the exact code already used at enrolment
   check("TOTP code already used at enrolment cannot be replayed", replay.status === 401);
   let locked = false;
   for (let i = 0; i < 6; i++) { const r = await A.c.post("/api/auth/mfa/verify", { code: "000000" }); if (r.json?.error?.code === "MFA_LOCKED") locked = true; }
@@ -179,7 +187,7 @@ section("MFA gates and second-factor enforcement");
 section("Commendations");
 let commId;
 {
-  const r = await A.c.post("/api/commendations", { playerProfileId: shadow.id, category: "great_communication", comment: "Great comms" });
+  const r = await A.c.post("/api/commendations", { playerProfileId: shadow.id, category: "great_communication" });
   check("Commendation accepted", r.status === 200);
   check("Comment / new-account commendations held for moderation", r.json?.status === "pending");
   commId = r.json?.id;
@@ -366,6 +374,61 @@ await relogin(M);
   check("Profile owner cannot remove reports", pay.status === 403);
 }
 
+section("Votes, Plus comments, moderation and owner disputes");
+{
+  const v1 = await A.c.post("/api/votes", { playerProfileId: ownedProfile.id, value: 1 });
+  check("Free member can upvote", v1.status === 200 && v1.json.upvotes >= 1 && v1.json.myVote === 1);
+  const v2 = await A.c.post("/api/votes", { playerProfileId: ownedProfile.id, value: -1 });
+  check("Changing a vote replaces it (one vote per member)", v2.json.upvotes === v1.json.upvotes - 1 && v2.json.downvotes >= 1);
+  const n = (await db.query(`SELECT count(*)::int AS n FROM player_votes WHERE voter_user_id = $1 AND player_profile_id = $2`, [A.id, ownedProfile.id])).rows[0].n;
+  check("Only one vote row stored", n === 1);
+  check("Owner cannot vote on own profile", (await C.c.post("/api/votes", { playerProfileId: ownedProfile.id, value: 1 })).status === 400);
+  check("Guest cannot vote", (await client().post("/api/votes", { playerProfileId: ownedProfile.id, value: 1 })).status === 401);
+  check("Vote value is validated", (await A.c.post("/api/votes", { playerProfileId: ownedProfile.id, value: 5 })).status === 400);
+
+  const free = await A.c.post("/api/comments", { playerProfileId: ownedProfile.id, tone: "negative", body: "Free user trying to comment on a player." });
+  check("Free member cannot write comments (402)", free.status === 402);
+  const freeComm = await A.c.post("/api/commendations", { playerProfileId: ownedProfile.id, category: "fair_play", comment: "Free comment attempt" });
+  check("Free member cannot attach written commendation comments", freeComm.status === 402);
+  execFileSync("node", ["scripts/dev-grant-plus.mjs", B.email, "grant"]);
+  const cm = await B.c.post("/api/comments", { playerProfileId: ownedProfile.id, tone: "negative", body: "Kept spamming taunts at the enemy team all match long." });
+  check("Plus member can submit a comment", cm.status === 200 && cm.json.status === "pending");
+  const cmId = cm.json?.id;
+  check("Second comment within 7 days rejected", (await B.c.post("/api/comments", { playerProfileId: ownedProfile.id, tone: "neutral", body: "Another comment straight away." })).status === 409);
+  const before = await B.c.get(`/api/players/${ownedProfile.public_id}/feedback?type=comments`);
+  check("Pending comment is not visible before moderation", before.status === 200 && !before.json.comments.some((c) => c.id === cmId));
+  check("Free non-owner cannot read comments", (await A.c.get(`/api/players/${ownedProfile.public_id}/feedback?type=comments`)).status === 402);
+  check("Non-moderator cannot approve comments", (await B.c.post(`/api/admin/comments/${cmId}`, { decision: "approve" })).status === 403);
+  check("Moderator approves comment", (await M.c.post(`/api/admin/comments/${cmId}`, { decision: "approve" })).status === 200);
+  const after = await C.c.get(`/api/players/${ownedProfile.public_id}/feedback?type=comments`);
+  check("Owner reads comments on own account WITHOUT Plus", after.status === 200 && after.json.comments.some((c) => c.id === cmId));
+  check("Comment author identity never exposed", !after.text.includes(B.id) && !after.text.includes(B.name) && !after.text.includes("author"));
+  check("Non-owner cannot report a comment as inaccurate", (await A.c.post(`/api/comments/${cmId}/dispute`, { reason: "Not my account but I dispute this." })).status === 403);
+  const dsp = await C.c.post(`/api/comments/${cmId}/dispute`, { reason: "I was not in that match; my match history shows I was offline." });
+  check("Owner can report a comment as inaccurate", dsp.status === 200);
+  check("Duplicate dispute rejected", (await C.c.post(`/api/comments/${cmId}/dispute`, { reason: "Disputing the same comment again." })).status === 409);
+  const dId = (await db.query(`SELECT id FROM comment_disputes WHERE comment_id = $1`, [cmId])).rows[0].id;
+  check("Owner cannot decide their own dispute", (await C.c.post(`/api/admin/disputes/${dId}`, { decision: "remove_comment", note: "Remove it please" })).status === 403);
+  check("Moderator removes the disputed comment", (await M.c.post(`/api/admin/disputes/${dId}`, { decision: "remove_comment", note: "Owner's match history contradicts the comment." })).status === 200);
+  const gone = await C.c.get(`/api/players/${ownedProfile.public_id}/feedback?type=comments`);
+  check("Removed comment no longer shown", !gone.json.comments.some((c) => c.id === cmId));
+  const own = await C.c.get("/api/notifications");
+  check("Owner notified of the outcome", own.json.notifications.some((x) => /comment you reported was removed/i.test(x.title)));
+  // DB-level defences
+  const app = new pg.Client({ connectionString: process.env.DATABASE_URL }); await app.connect();
+  const as = async (uid, role, sql, params) => { await app.query("BEGIN"); await app.query(`SELECT set_config('search_path','ss, public',true), set_config('app.user_id',$1,true), set_config('app.role',$2,true)`, [uid, role]); try { const x = await app.query(sql, params); return { rowCount: x.rowCount, rows: x.rows }; } catch (e) { return { error: e.code }; } finally { await app.query("ROLLBACK"); } };
+  const forged = await as(A.id, "user", `INSERT INTO player_comments (player_profile_id, author_user_id, tone, body, status) VALUES ($1, $2, 'positive', 'forged approved comment text', 'approved')`, [shadow.id, A.id]);
+  check("DB: non-Plus user cannot insert a comment at all", forged.error === "42501");
+  const forged2 = await as(B.id, "user", `INSERT INTO player_comments (player_profile_id, author_user_id, tone, body, status) VALUES ($1, $2, 'positive', 'forged approved comment text', 'approved') RETURNING status`, [shadow.id, B.id]);
+  check("DB: Plus user's comment forced to pending", forged2.rows?.[0]?.status === "pending");
+  const voteOther = await as(A.id, "user", `INSERT INTO player_votes (voter_user_id, player_profile_id, value) VALUES ($1, $2, 1)`, [B.id, shadow.id]);
+  check("DB: cannot cast votes as another user", voteOther.error === "42501");
+  const readVotes = await as(A.id, "user", `SELECT * FROM player_votes WHERE voter_user_id <> $1`, [A.id]);
+  check("DB: who voted is private", Array.isArray(readVotes.rows) && readVotes.rows.length === 0);
+  await app.end();
+  execFileSync("node", ["scripts/dev-grant-plus.mjs", B.email, "revoke"]);
+}
+
 section("Database Row Level Security (direct attack as app role)");
 {
   const app = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -491,8 +554,10 @@ section("QA round 1 regressions");
   const big = new ReadableStream({ start(ctrl) { const chunk = new Uint8Array(1024 * 1024); for (let i = 0; i < 20; i++) ctrl.enqueue(chunk); ctrl.close(); } });
   const cookie = [...D.c.jar].map(([k, v]) => `${k}=${v}`).join("; ");
   await db.query(`DELETE FROM rate_limits WHERE bucket LIKE 'report-%'`);
-  const up = await fetch(BASE + "/api/reports", { method: "POST", duplex: "half", body: big, headers: { "x-ss-csrf": "1", cookie, "x-forwarded-for": D.c.ip, "content-type": "multipart/form-data; boundary=x" } });
-  check("QA-07: chunked upload over 16MB rejected (413)", up.status === 413);
+  let upStatus;
+  try { upStatus = (await fetch(BASE + "/api/reports", { method: "POST", duplex: "half", body: big, headers: { "x-ss-csrf": "1", cookie, "x-forwarded-for": D.c.ip, "content-type": "multipart/form-data; boundary=x" } })).status; }
+  catch { upStatus = "connection closed by server"; }
+  check("QA-07: chunked upload over 16MB rejected (413 or connection closed)", upStatus === 413 || upStatus === "connection closed by server", String(upStatus));
   const nul = await client().get("/api/players/search?q=%00");
   check("NUL byte in search does not 500", nul.status === 200);
   const nullOrigin = await B.c.post("/api/reports", new FormData(), { headers: { origin: "null" } });

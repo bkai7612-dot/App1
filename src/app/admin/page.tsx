@@ -17,14 +17,17 @@ export default async function AdminHome() {
     (SELECT count(*) FROM report_appeals WHERE status IN ('submitted','under_review')) AS appeals,
     (SELECT count(*) FROM commendations WHERE status = 'pending') AS pending_comm,
     (SELECT count(*) FROM account_verifications WHERE status = 'pending' AND method = 'manual_review') AS pending_ver,
-    (SELECT count(*) FROM report_responses WHERE status = 'pending') AS pending_resp`));
+    (SELECT count(*) FROM report_responses WHERE status = 'pending') AS pending_resp,
+    (SELECT count(*) FROM player_comments WHERE status = 'pending') AS pending_comments,
+    (SELECT count(*) FROM comment_disputes WHERE status = 'open') AS open_disputes,
+    (SELECT count(*) FROM player_votes) AS votes`));
   const subs = can(auth.user.role, "billing.view")
     ? await withDb(auth.db, (tx) => tx.one<{ n: string }>(`SELECT count(*) AS n FROM subscriptions WHERE status IN ('active','trialing') AND current_period_end > now()`))
     : null;
   const cards: [string, string | undefined][] = [
     ["Registered users", s?.users], ["Player profiles", s?.profiles], ["Commendations", s?.commendations], ["Report submissions", s?.reports],
     ["Reports awaiting review", s?.awaiting], ["Disputed / appealed", s?.disputed], ["Open appeals", s?.appeals], ["Active subscriptions", subs?.n ?? "—"],
-    ["Commendation comments pending", s?.pending_comm], ["Ownership claims pending", s?.pending_ver], ["Player responses pending", s?.pending_resp],
+    ["Commendation comments pending", s?.pending_comm], ["Ownership claims pending", s?.pending_ver], ["Player responses pending", s?.pending_resp], ["Comments awaiting approval", s?.pending_comments], ["Comments reported inaccurate", s?.open_disputes], ["Community votes", s?.votes],
   ];
   return (
     <div>

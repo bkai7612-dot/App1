@@ -8,8 +8,8 @@ import { CheckoutButton } from "@/components/premium/CheckoutButton";
 
 export const metadata: Metadata = { title: "Pricing" };
 
-const FREE = ["Register and log in", "Search players", "View public player profiles", "See positive and negative totals", "View verified account-link status", "Give commendations", "Submit reports", "Manage your own profile", "See, respond to and appeal reports about you"];
-const PLUS = ["Everything in Free", "Read approved commendation comments", "Read moderated report summaries", "See feedback dates and report categories", "See dispute and resolution status", "Month-by-month reputation history"];
+const FREE = ["Search players and view profiles", "Upvote and downvote players", "See vote, commendation and report totals", "Give commendations", "Report misconduct (always free)", "Read comments on your own account and report inaccurate ones", "See, respond to and appeal reports about you"];
+const PLUS = ["Everything in Free", "Leave written comments on players", "Read approved player comments", "Read moderated report summaries", "See feedback dates and report categories", "See dispute and resolution status", "Month-by-month reputation history"];
 const NEVER = ["Access to private evidence", "Access to unmoderated reports", "Reporter identities", "Paying to remove reports or improve reputation"];
 
 export default async function Pricing() {

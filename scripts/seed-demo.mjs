@@ -83,6 +83,24 @@ const aurora = await profile("AuroraBuilds", mc, xbox, { activeDaysAgo: 5 });
 await commend(aurora, mc, xbox, 3);
 await profile("Kestrel", lol, riot, { activeDaysAgo: 8 });
 
+// Community votes (free members) and moderator-approved comments (Plus members).
+async function votes(p, up, down) {
+  for (let i = 0; i < up + down; i++) await c.query(`INSERT INTO player_votes (voter_user_id, player_profile_id, value, is_demo) VALUES ($1, $2, $3, true)`, [users[i % users.length], p.id, i < up ? 1 : -1]);
+}
+// Only 8 demo voters exist, so each profile can get at most 8 votes.
+await votes(shadow, 5, 3); await votes(shadow2, 4, 0); await votes(nova, 6, 1); await votes(aurora, 3, 0);
+const PLAYER_COMMENTS = [
+  [shadow, "positive", "Solid anchor on defence and always shares intel. Queued with him five times this season and every game was positive.", 6],
+  [shadow, "negative", "Got very heated in voice chat after we lost the first two rounds. Calmed down later but it wasn't fun.", 14],
+  [shadow, "neutral", "Mixed experience. Good callouts, but tends to go off on his own and ignore the plan.", 30],
+  [nova, "positive", "Patient with newer players and explains utility usage clearly.", 9],
+];
+for (const [p, tone, body, days] of PLAYER_COMMENTS) {
+  await c.query(`INSERT INTO player_comments (player_profile_id, author_user_id, tone, body, status, is_demo, created_at, moderated_at)
+    VALUES ($1, $2, $3, $4, 'approved', true, now() - ($5 || ' days')::interval, now() - ($5 || ' days')::interval)`, [p.id, users[days % users.length], tone, body, String(days)]);
+}
+await c.query(`INSERT INTO player_comments (player_profile_id, author_user_id, tone, body, status, is_demo) VALUES ($1, $2, 'negative', 'Demo comment awaiting moderation: kept spamming the same voice line all match.', 'pending', true)`, [shadow.id, users[5]]);
+
 await c.query("COMMIT");
 await c.end();
 console.log("Seeded fictional demonstration data. Try searching for 'Shadow'.");

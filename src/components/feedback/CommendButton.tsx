@@ -7,7 +7,7 @@ import { COMMENDATION_LABELS } from "@/lib/categories";
 import { Modal } from "@/components/ui/Modal";
 import { GateError } from "./MfaGateMessage";
 
-export function CommendButton({ profileId, signedIn }: { profileId: string; signedIn: boolean }) {
+export function CommendButton({ profileId, signedIn, plus = false }: { profileId: string; signedIn: boolean; plus?: boolean }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState("excellent_teammate");
   const [comment, setComment] = useState("");
@@ -42,11 +42,11 @@ export function CommendButton({ profileId, signedIn }: { profileId: string; sign
                 ))}
               </div>
             </fieldset>
-            <label className="block">
+            {plus ? <label className="block">
               <span className="label">Comment (optional)</span>
               <textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={3} className="input" placeholder="Great shot-calling and kept the team positive." />
               <span className="mt-1 block text-xs text-text-muted">{comment.length}/500 · Comments are checked by a moderator. Don&apos;t include personal information.</span>
-            </label>
+            </label> : <p className="text-xs text-text-muted">Want to add a written comment? That&apos;s a ServerSentry Plus feature.</p>}
             <GateError error={err} />
             <button type="submit" disabled={busy} className="btn-positive w-full">{busy ? <span className="spinner" /> : <ThumbsUp className="h-4 w-4" />} Submit commendation</button>
           </form>

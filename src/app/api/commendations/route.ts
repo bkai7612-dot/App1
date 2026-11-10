@@ -3,7 +3,8 @@ import { route, zOptionalText } from "@/lib/server/api";
 import { withDb, SYSTEM } from "@/lib/db";
 import { audit } from "@/lib/server/audit";
 import { notify } from "@/lib/server/notify";
-import { badRequest, conflict, forbidden, notFound } from "@/lib/server/errors";
+import { ApiError, badRequest, conflict, forbidden, notFound } from "@/lib/server/errors";
+import { hasPlus } from "@/lib/server/entitlements";
 import { rateLimit } from "@/lib/server/ratelimit";
 import { COMMENDATION_LABELS } from "@/lib/categories";
 
@@ -16,6 +17,7 @@ const Body = z.object({
 export const POST = route({ auth: "mfa", body: Body, rate: { name: "commend-day", limit: 15, windowSec: 86400 } }, async ({ auth, body, meta }) => {
   if (auth!.user.suspended) throw forbidden();
   await rateLimit(`commend-hour:${auth!.user.id}`, 6, 3600);
+  if (body.comment && !(await hasPlus(auth!.user.id))) throw new ApiError(402, "PLUS_REQUIRED", "Written comments are a ServerSentry Plus feature. Your commendation can still be sent without one.");
   return withDb(auth!.db, async (tx) => {
     // Serialise per (submitter, profile) to prevent race-condition duplicates.
     await tx.q(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`commend:${auth!.user.id}:${body.playerProfileId}`]);

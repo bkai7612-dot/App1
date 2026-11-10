@@ -28,6 +28,8 @@ export interface PlayerSummary {
   claimed: boolean;
   positive_total: number;
   negative_published: number;
+  upvotes: number;
+  downvotes: number;
   last_active_at: Date;
   created_at: Date;
   is_demo: boolean;
@@ -70,9 +72,10 @@ export async function searchPlayers(sp: SearchParams): Promise<{ results: Player
       `SELECT p.id, p.public_id, p.display_name, g.name AS game_name, g.slug AS game_slug, pl.name AS platform_name, pl.slug AS platform_slug,
               p.platform_user_id, ${IDENTITY_SQL} AS identity_status, (p.owner_user_id IS NOT NULL) AS claimed,
               s.positive_total::int AS positive_total, s.negative_published::int AS negative_published,
+              vs.upvotes::int AS upvotes, vs.downvotes::int AS downvotes,
               p.last_active_at, p.created_at, p.is_demo
        FROM player_profiles p JOIN games g ON g.id = p.game_id JOIN platforms pl ON pl.id = p.platform_id
-       JOIN player_reputation_stats s ON s.player_profile_id = p.id
+       JOIN player_reputation_stats s ON s.player_profile_id = p.id JOIN player_vote_stats vs ON vs.player_profile_id = p.id
        WHERE ${whereSql} ORDER BY ${order} LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`, params);
     return { results: rows, total, page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
   });
@@ -103,7 +106,7 @@ export async function getProfileByPublicId(publicId: string, ctx: DbContext = GU
     `SELECT p.id, p.public_id, p.display_name, g.name AS game_name, g.slug AS game_slug, pl.name AS platform_name, pl.slug AS platform_slug,
             p.platform_user_id, ${IDENTITY_SQL} AS identity_status, (p.owner_user_id IS NOT NULL) AS claimed, p.owner_user_id,
             p.game_id, p.platform_id, pl.integration_status AS platform_integration, pl.identifier_label,
-            0 AS positive_total, 0 AS negative_published, p.last_active_at, p.created_at, p.is_demo
+            0 AS positive_total, 0 AS negative_published, 0 AS upvotes, 0 AS downvotes, p.last_active_at, p.created_at, p.is_demo
      FROM player_profiles p JOIN games g ON g.id = p.game_id JOIN platforms pl ON pl.id = p.platform_id
      WHERE p.public_id = $1 AND p.deleted_at IS NULL`, [publicId]));
 }
@@ -182,4 +185,22 @@ export async function landingStats() {
 export async function profileIdByPublicId(publicId: string): Promise<string | null> {
   const p = await withDb(SYSTEM, (tx) => tx.one<{ id: string }>(`SELECT id FROM player_profiles WHERE public_id = $1 AND deleted_at IS NULL`, [publicId]));
   return p?.id ?? null;
+}
+
+export interface PublicComment { id: string; tone: string; body: string; created_at: Date; is_demo: boolean; dispute_status: string | null }
+
+/** Approved comments (column-safe view: never the author). CALLERS MUST CHECK ENTITLEMENT (Plus, or the profile owner). */
+export async function getPublicComments(profileId: string, limit = 100): Promise<PublicComment[]> {
+  return withDb(SYSTEM, (tx) => tx.q<PublicComment>(
+    `SELECT c.id, c.tone, c.body, c.created_at, c.is_demo,
+            (SELECT d.status FROM comment_disputes d WHERE d.comment_id = c.id ORDER BY d.created_at DESC LIMIT 1) AS dispute_status
+     FROM public_player_comments c WHERE c.player_profile_id = $1 ORDER BY c.created_at DESC LIMIT $2`, [profileId, limit]));
+}
+
+export async function getVoteStats(profileId: string, viewerId?: string | null) {
+  return withDb(SYSTEM, async (tx) => {
+    const s = await tx.one<{ upvotes: string; downvotes: string; comments: string }>(`SELECT upvotes, downvotes, comments FROM player_vote_stats WHERE player_profile_id = $1`, [profileId]);
+    const mine = viewerId ? await tx.one<{ value: number }>(`SELECT value FROM player_votes WHERE voter_user_id = $1 AND player_profile_id = $2`, [viewerId, profileId]) : null;
+    return { upvotes: Number(s?.upvotes ?? 0), downvotes: Number(s?.downvotes ?? 0), comments: Number(s?.comments ?? 0), myVote: mine?.value ?? 0 };
+  });
 }

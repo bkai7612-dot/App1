@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ChevronLeft, ChevronRight, ThumbsUp, ShieldAlert, UserPlus, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, ThumbsUp, ShieldAlert, UserPlus, Users, ArrowBigUp, ArrowBigDown } from "lucide-react";
 import { PlayerSearchForm } from "@/components/forms/PlayerSearchForm";
 import { IdentityBadge, DemoBadge } from "@/components/ui/Badges";
 import { Empty, Notice } from "@/components/ui/Card";
@@ -87,7 +87,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                             <p className="mt-1 flex items-center gap-1 text-xs text-amber-300"><Users className="h-3.5 w-3.5" /> Shares a username with another profile. Check game, platform and ID.</p>
                           )}
                         </div>
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-2">
+                          <span className="flex items-center gap-1 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-sm text-text-muted" title="Community votes: up / down"><ArrowBigUp className="h-4 w-4 text-pos" />{r.upvotes}<ArrowBigDown className="ml-1 h-4 w-4 text-neg" />{r.downvotes}</span>
                           <span className="flex items-center gap-1.5 rounded-lg bg-pos/10 px-3 py-1.5 text-sm font-semibold text-pos" title="Positive commendations"><ThumbsUp className="h-4 w-4" />+{r.positive_total}</span>
                           <span className="flex items-center gap-1.5 rounded-lg bg-neg/10 px-3 py-1.5 text-sm font-semibold text-neg" title="Published negative reports (moderated allegations)"><ShieldAlert className="h-4 w-4" />−{r.negative_published}</span>
                         </div>

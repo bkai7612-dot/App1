@@ -6,6 +6,7 @@ import { getAuth } from "@/lib/auth/session";
 import { hasPlus } from "@/lib/server/entitlements";
 import {
   getProfileByPublicId, getStats, getLinkedAccounts, getPublicCommendations, getPublicReports, getReputationHistory,
+  getVoteStats, getPublicComments,
 } from "@/lib/server/players";
 import { withDb, SYSTEM } from "@/lib/db";
 import { IdentityBadge, DemoBadge, ReportStatusBadge, IDENTITY_META } from "@/components/ui/Badges";
@@ -14,6 +15,9 @@ import { PremiumLock } from "@/components/premium/PremiumLock";
 import { CommendButton } from "@/components/feedback/CommendButton";
 import { ClaimProfileButton } from "@/components/feedback/ClaimProfileButton";
 import { OwnerReportActions } from "@/components/feedback/OwnerReportActions";
+import { VoteButtons } from "@/components/feedback/VoteButtons";
+import { CommentButton } from "@/components/feedback/CommentButton";
+import { DisputeCommentButton } from "@/components/feedback/DisputeCommentButton";
 import { COMMENDATION_LABELS, REPORT_LABELS } from "@/lib/categories";
 
 type Props = { params: Promise<{ publicId: string }>; searchParams: Promise<Record<string, string | undefined>> };
@@ -27,6 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "positive", label: "Positive Feedback" },
+  { id: "comments", label: "Comments" },
   { id: "negative", label: "Negative Reports" },
   { id: "linked", label: "Linked Accounts" },
   { id: "history", label: "Reputation History" },
@@ -42,11 +47,14 @@ export default async function PlayerPage({ params, searchParams }: Props) {
   if (!profile) notFound();
   const auth = await getAuth();
   const viewer = auth && !auth.pendingMfa ? auth : null;
-  const [stats, linked, plus] = await Promise.all([
+  const [stats, linked, plus, votes] = await Promise.all([
     getStats(profile.id), getLinkedAccounts(profile.id), viewer ? hasPlus(viewer.user.id) : Promise.resolve(false),
+    getVoteStats(profile.id, viewer?.user.id),
   ]);
   const isOwner = !!viewer && profile.owner_user_id === viewer.user.id;
   const returnTo = `/players/${profile.public_id}?tab=${tab}`;
+  const canVote = !!viewer && !isOwner && viewer.user.mfaEnabled && viewer.session.mfaVerified && viewer.user.emailVerified;
+  const voteReason = !viewer ? "Sign in to vote (free)." : isOwner ? "You can't vote on your own profile." : "Set up two-factor authentication in Account Settings to vote.";
 
   const STAT_ROWS = [
     { label: "Total submissions", value: stats.reports_total, help: "All negative reports ever submitted about this profile, in any state." },
@@ -82,12 +90,17 @@ export default async function PlayerPage({ params, searchParams }: Props) {
               <p className="mt-3 max-w-xl text-xs text-text-muted">{IDENTITY_META[profile.identity_status]?.desc}</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row lg:flex-col lg:items-stretch">
-              {!isOwner && <CommendButton profileId={profile.id} signedIn={!!viewer} />}
+              {!isOwner && <CommendButton profileId={profile.id} signedIn={!!viewer} plus={plus} />}
+              {!isOwner && <CommentButton profileId={profile.id} plus={plus} signedIn={!!viewer} />}
               {!isOwner && (
                 <Link href={viewer ? `/players/${profile.public_id}/report` : `/login?next=/players/${profile.public_id}/report`} className="btn-ghost"><Flag className="h-4 w-4" /> Report behaviour</Link>
               )}
               {!profile.claimed && <ClaimProfileButton profileId={profile.id} signedIn={!!viewer} platformSlug={profile.platform_slug} />}
             </div>
+          </div>
+          <div className="mt-6">
+            <p className="label">Community votes</p>
+            <VoteButtons profileId={profile.id} initial={{ upvotes: votes.upvotes, downvotes: votes.downvotes, myVote: votes.myVote }} canVote={canVote} reason={canVote ? undefined : voteReason} />
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:max-w-md">
             <div className="rounded-xl border border-pos/25 bg-pos/[0.07] p-4">
@@ -146,6 +159,11 @@ export default async function PlayerPage({ params, searchParams }: Props) {
             <PremiumLock title="Unlock Player Feedback" text="See what other players have said about this account." returnTo={returnTo} signedIn={!!viewer} />
           )}
 
+          {tab === "comments" && (
+            plus || isOwner ? <CommentsList profileId={profile.id} isOwner={isOwner} plus={plus} /> :
+            <PremiumLock title="Unlock Player Comments" text="Read moderated comments from other players, and write your own." returnTo={returnTo} signedIn={!!viewer} />
+          )}
+
           {tab === "negative" && (
             plus || isOwner ? <NegativeList profileId={profile.id} ownerUserId={isOwner ? viewer!.user.id : null} plus={plus} /> :
             <PremiumLock title="Unlock Report Summaries" text="Read moderated report summaries, categories, dates and dispute or resolution status." returnTo={returnTo} signedIn={!!viewer} />
@@ -193,6 +211,34 @@ async function PositiveList({ profileId }: { profileId: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+async function CommentsList({ profileId, isOwner, plus }: { profileId: string; isOwner: boolean; plus: boolean }) {
+  const items = await getPublicComments(profileId);
+  const toneCls: Record<string, string> = { positive: "border-pos/40 bg-pos/10 text-pos", neutral: "border-ink-line text-text-muted", negative: "border-neg/40 bg-neg/10 text-neg" };
+  return (
+    <div className="space-y-4">
+      {isOwner && !plus && <Notice>These comments are on your account, so you can read them for free. If one is inaccurate, report it and a moderator will review it.</Notice>}
+      {items.length === 0 ? <Empty title="No comments yet">Plus members can leave a comment. Every comment is checked by a moderator before it appears.</Empty> : (
+        <ul className="grid gap-3">
+          {items.map((c) => (
+            <li key={c.id} className="glass p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`chip ${toneCls[c.tone]}`}>{c.tone[0].toUpperCase() + c.tone.slice(1)}</span>
+                <span className="chip border-ink-line text-text-muted">Moderator approved</span>
+                {c.dispute_status === "open" && <span className="chip border-amber-400/40 text-amber-300">Reported as inaccurate · under review</span>}
+                {c.dispute_status === "rejected" && <span className="chip border-ink-line text-text-muted">Accuracy reviewed and kept</span>}
+                <span className="ml-auto text-xs text-text-muted">{fmtDate(c.created_at)}{c.is_demo ? " · demo" : ""}</span>
+              </div>
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm">{c.body}</p>
+              {isOwner && c.dispute_status !== "open" && c.dispute_status !== "rejected" && <div className="mt-3 border-t border-ink-line pt-3"><DisputeCommentButton commentId={c.id} /></div>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-text-muted">Comments are written by ServerSentry Plus members and checked by moderators. They are personal opinions, not findings by ServerSentry. Authors are never shown.</p>
+    </div>
   );
 }
 
