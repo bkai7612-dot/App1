@@ -4,14 +4,34 @@ Principle: integrate only through **official, documented and authorised** mechan
 
 > The status below reflects the developer's knowledge at build time. **Re-verify each publisher's current developer programme and terms before implementing**, because access policies change.
 
-| Platform | Official mechanism | Status in ServerSentry | What's needed |
+## How players prove they own an account (best route first)
+
+| Route | Platforms | Speed | Status |
 |---|---|---|---|
-| Steam | Steam OpenID 2.0 sign-in (documented in Steamworks "Web API / OpenID"); Steam Web API `ISteamUser/GetPlayerSummaries` for public persona names | **Implemented** (`src/lib/server/steam.ts`): proves control of a SteamID64 and verifies the assertion directly with Steam (`check_authentication`). **Not tested live**, because the dev sandbox couldn't reach steamcommunity.com | Optional `STEAM_WEB_API_KEY`; accept the Steam Web API Terms; test end-to-end in staging |
-| Riot Games | Riot Sign On (RSO, OAuth 2.0) for approved production apps; `account-v1` gives PUUID and Riot ID | Manual / future integration point | Apply for a production key with RSO in the Riot Developer Portal; product registration and policy review |
-| Xbox | Microsoft identity platform OAuth plus Xbox Live user token exchange; access to Xbox services is governed by Microsoft partner programmes | Manual / future | Confirm eligibility for Xbox services for a web product; Azure app registration; Microsoft terms review |
-| PlayStation Network | No public third-party web sign-in or ownership API known | Manual | Contact Sony's partner programme; otherwise remain manual |
-| Ubisoft Connect | No public third-party developer API known | Manual | Contact Ubisoft partnerships |
-| Minecraft (Java) | Microsoft identity → Xbox Live → Minecraft services; new apps need Mojang/Microsoft permission | Manual (game) | Request API permission; out of scope until approved |
+| **Official sign-in**: Steam OpenID 2.0 | Steam | Instant | Implemented (`src/lib/server/steam.ts`); not tested live (sandbox) |
+| **Official sign-in**: Battle.net OAuth (open developer portal) | Battle.net | Instant | Implemented (`src/lib/server/battlenet.ts`); needs `BATTLENET_CLIENT_ID/SECRET`; not tested live |
+| **Discord verified connections** (`identify connections` scope) | PlayStation, Xbox, Riot, Epic, Battle.net, Steam | Instant if connected in Discord | Implemented (`src/lib/server/discord.ts`); needs `DISCORD_CLIENT_ID/SECRET`; not tested live. **The only automatic route for PlayStation** |
+| **Profile code check** | Every platform (Ubisoft, EA, Nintendo, Rockstar, Roblox, mobile, other) | Moderator confirms, about 30 seconds each | Implemented and tested |
+| **QR "use my phone"** | Any instant route above | Scan, then one tap on the phone | Implemented and tested up to the provider hand-off |
+
+Automatic approval rules (to stop people claiming names that aren't theirs):
+- An official sign-in or Discord connection must be **verified by the platform**.
+- It is approved automatically only if its **account ID** matches the profile's recorded ID, or, on platforms with globally unique names (PSN, Xbox, Riot, Battle.net, Epic), its **exact name** matches.
+- Otherwise the claim goes to a moderator **with the proven details**.
+- A platform account can be verified on only **one** profile (database unique index).
+- Verification is only needed to *claim* a profile; searching, voting, commenting and reporting never wait on it.
+
+Official direct sign-ins that exist but need the publisher's approval before they can be added (planned integration points, not implemented):
+
+| Platform | Mechanism | What's needed |
+|---|---|---|
+| Xbox | Microsoft identity platform + Xbox Live user token | Azure app registration; confirm Microsoft permits Xbox Live sign-in for this use |
+| Riot Games | Riot Sign On (RSO) | Production API key with RSO approval |
+| Epic Games | Epic Account Services | Epic Developer Portal product + brand review |
+| PlayStation | none public | Sony partner programme; until then Discord or the code check |
+| Ubisoft, EA, Nintendo | none public | Code check |
+
+> Re-verify each publisher's current developer programme and terms before go-live; access policies change.
 
 ## Adding a game
 

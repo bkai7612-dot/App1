@@ -2,6 +2,8 @@
 
 **Quickest way: press this link:** https://claude.ai/artifact/TTBK472MPTu4m1Ro7PLK5t. It's a clickable prototype with no sign-in; use the **View as** bar at the top to switch between guest, free member, Plus member, profile owner and moderator. The rest of this guide covers the full working app, which runs on the development server.
 
+**New in the link:** search 189 games; open **Linked Accounts** to pick a platform tile and verify (instant sign-in, a QR code for your phone, or a profile code for a moderator to check); claim a Shadow profile with "Is this you?"; see **My Account** for your profile, commendations, comments, reports and votes in one place.
+
 This is a working prototype running on a development server with **fictional demonstration data**. Payments run in simulated mode: real Stripe Checkout needs your Stripe keys.
 
 ## Test accounts
