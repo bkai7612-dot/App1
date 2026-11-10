@@ -34,7 +34,7 @@ export const POST = route({ permission: "mod.appeals.decide", body: Body }, asyn
       } else {
         await tx.q(`UPDATE reports SET status = 'resolved', outcome_type = 'upheld', outcome_note = coalesce(outcome_note, 'Appeal reviewed by a senior moderator; the report was upheld.'), resolved_at = now(), closed_at = now() WHERE id = $1`, [a.report_id]);
       }
-      if (a.appellant_user_id) await notify(tx, a.appellant_user_id, "appeal_reviewed", body.decision === "upheld" ? "Your appeal was successful" : "Your appeal was reviewed", undefined, "/me/reports");
+      if (a.appellant_user_id) await notify(tx, a.appellant_user_id, "appeal_reviewed", body.decision === "upheld" ? "Your appeal was successful: the report was removed" : "Your appeal was reviewed: the report stands", `Reason: ${body.note}`.slice(0, 480), `/players/${a.public_id}?tab=negative`);
       await moderationAction(tx, auth!.user.id, { type: "report", id: a.report_id }, `appeal_${body.decision}`, a.report_status, body.decision === "upheld" ? "removed" : "resolved", body.note);
     }
     await audit(tx, auth!.user.id, `moderation.appeal.${body.decision}`, { type: "report_appeal", id: a.id }, { report: a.report_id }, meta.ipHash);

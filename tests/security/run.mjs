@@ -255,7 +255,12 @@ section("Premium entitlement enforced server-side");
   const path = `/api/players/${shadow.public_id}/feedback?type=commendations`;
   check("Guest blocked from comments API", (await client().get(path)).status === 402);
   check("Free user blocked from comments API", (await B.c.get(path)).status === 402);
-  check("Free user blocked from report summaries API", (await B.c.get(`/api/players/${shadow.public_id}/feedback?type=reports`)).status === 402);
+  const freeReps = await B.c.get(`/api/players/${shadow.public_id}/feedback?type=reports`);
+  check("D1: free users see report status but NOT the moderator summaries", freeReps.status === 200 && freeReps.json.summariesIncluded === false && freeReps.json.reports.length > 0 && freeReps.json.reports.every((r) => r.public_summary === null && r.status && r.category));
+  const guestStats = (await client().get(`/api/players/${shadow.public_id}/feedback?type=stats`)).json.stats;
+  check("D2: unreviewed counts hidden from the public", !("reports_total" in guestStats) && !("reports_pending" in guestStats) && "negative_published" in guestStats);
+  const guestPage = await client().get(`/players/${shadow.public_id}`);
+  check("D2: profile page doesn't show private counts to guests", !guestPage.text.includes("Awaiting moderation (private)"));
   check("Free user blocked from history API", (await B.c.get(`/api/players/${shadow.public_id}/feedback?type=history`)).status === 402);
   const page = await B.c.get(`/players/${shadow.public_id}?tab=positive`);
   check("Free user profile page does not contain comment text", !page.text.includes("Called every rotation clearly"));
@@ -368,6 +373,11 @@ await relogin(M);
   check("Report becomes disputed after response", (await db.query(`SELECT status FROM reports WHERE id = $1`, [ownerReport])).rows[0].status === "disputed");
   check("Owner can appeal", (await C.c.post(`/api/reports/${ownerReport}/appeal`, { grounds: "The match history shows I was offline at the stated time of the incident." })).status === 200);
   check("Duplicate appeal rejected", (await C.c.post(`/api/reports/${ownerReport}/appeal`, { grounds: "Second appeal attempt for the same report while one is open." })).status === 409);
+  check("T-07: non-owner cannot withdraw the appeal", (await B.c.post(`/api/reports/${ownerReport}/appeal/withdraw`, {})).status === 404);
+  check("T-07: owner can withdraw an appeal before review", (await C.c.post(`/api/reports/${ownerReport}/appeal/withdraw`, {})).status === 200);
+  check("T-07: report returns to disputed after withdrawal", (await db.query(`SELECT status FROM reports WHERE id = $1`, [ownerReport])).rows[0].status === "disputed");
+  check("T-07: owner can appeal again after withdrawing", (await C.c.post(`/api/reports/${ownerReport}/appeal`, { grounds: "Re-submitting my appeal with the match ID: 4471-2290-88." })).status === 200);
+  check("T-07: owner can withdraw a pending response", (await C.c.post(`/api/reports/${ownerReport}/response/withdraw`, {})).status === 200);
   const appealId = (await db.query(`SELECT id FROM report_appeals WHERE report_id = $1`, [ownerReport])).rows[0].id;
   check("Junior moderator cannot decide appeals", (await M.c.post(`/api/admin/appeals/${appealId}`, { decision: "upheld", note: "Looks right to me" })).status === 403);
   const pay = await C.c.post(`/api/admin/reports/${ownerReport}`, { action: "remove", note: "I paid" });
@@ -376,6 +386,17 @@ await relogin(M);
 
 section("Votes, Plus comments, moderation and owner disputes");
 {
+  // D3: a brand-new account's vote is saved but held for 72 hours.
+  const newbie = await makeUser("newbie");
+
+  const held = await newbie.c.post("/api/votes", { playerProfileId: ownedProfile.id, value: -1 });
+  check("D3: new-account vote is accepted but held", held.status === 200 && !!held.json.heldUntil);
+  const vs = (await db.query(`SELECT downvotes FROM player_vote_stats WHERE player_profile_id = $1`, [ownedProfile.id])).rows[0];
+  check("D3: held vote doesn't count yet", Number(vs.downvotes) === 0, String(vs.downvotes));
+
+  // Age account A so its votes count immediately (established member).
+  await db.query(`SELECT set_config('app.role','system',false)`);
+  await db.query(`UPDATE users SET created_at = now() - interval '10 days' WHERE id = $1`, [A.id]);
   const v1 = await A.c.post("/api/votes", { playerProfileId: ownedProfile.id, value: 1 });
   check("Free member can upvote", v1.status === 200 && v1.json.upvotes >= 1 && v1.json.myVote === 1);
   const v2 = await A.c.post("/api/votes", { playerProfileId: ownedProfile.id, value: -1 });
@@ -480,6 +501,14 @@ section("Account verification: code check, QR phone handoff, official sign-in ro
   const xb = await C.c.post("/api/identity/accounts", { playerProfileId: ownedProfile.id, platformSlug: "xbox", username: `XB_${RUN}` });
   const xbCode = await C.c.post(`/api/identity/accounts/${xb.json.id}/verify`, { method: "code" });
   check("I-01: a second account on the same profile can be verified while another is pending", xbCode.status === 200 && !!xbCode.json?.code, xbCode.text);
+  const placed = new FormData(); placed.set("profileUrl", "https://example.com/u/xb-player"); placed.append("screenshot", await pngFile("proof.png"));
+  const pl = await C.c.post(`/api/identity/verifications/${xbCode.json.verificationId}/placed`, placed);
+  check("T-13: 'I've placed the code' with link + screenshot accepted", pl.status === 200, pl.text);
+  const badUrl = new FormData(); badUrl.set("profileUrl", "javascript:alert(1)");
+  check("T-13: non-https profile links rejected", (await C.c.post(`/api/identity/verifications/${xbCode.json.verificationId}/placed`, badUrl)).status === 400);
+  check("T-13: other users can't mark someone else's code as placed", (await B.c.post(`/api/identity/verifications/${xbCode.json.verificationId}/placed`, new FormData())).status === 404);
+  check("T-13: verification screenshot is staff-only", (await C.c.get(`/api/admin/verifications/${xbCode.json.verificationId}/evidence`)).status === 403);
+  check("T-13: moderator can view the screenshot", (await M.c.get(`/api/admin/verifications/${xbCode.json.verificationId}/evidence`)).status === 200);
   const bn = await B.c.get("/api/identity/handoff/00000000-0000-0000-0000-000000000000");
   check("Unknown handoff id returns 404", bn.status === 404);
   const app = new pg.Client({ connectionString: process.env.DATABASE_URL }); await app.connect();

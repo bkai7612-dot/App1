@@ -1,18 +1,25 @@
 import { BadgeCheck, CircleHelp, CircleDashed, Link2Off, FlaskConical } from "lucide-react";
 
 export const IDENTITY_META: Record<string, { label: string; desc: string; cls: string; Icon: typeof BadgeCheck }> = {
-  verified: { label: "Verified", desc: "Ownership confirmed via an official sign-in or moderator review.", cls: "border-pos/40 bg-pos/10 text-pos", Icon: BadgeCheck },
+  verified: { label: "Verified", desc: "Ownership of this gaming account has been confirmed.", cls: "border-pos/40 bg-pos/10 text-pos", Icon: BadgeCheck },
   possible_match: { label: "Possible match", desc: "A moderator found supporting signals, but ownership is not confirmed.", cls: "border-amber-400/40 bg-amber-400/10 text-amber-300", Icon: CircleHelp },
   unverified: { label: "Unverified", desc: "Identified manually by username. Not confirmed as belonging to any person.", cls: "border-ink-line bg-white/[0.03] text-text-muted", Icon: CircleDashed },
   unlinked: { label: "Unlinked", desc: "This account was unlinked from the profile.", cls: "border-ink-line bg-white/[0.02] text-text-muted/70", Icon: Link2Off },
 };
 
-export function IdentityBadge({ status }: { status: string }) {
+export const VERIFY_METHOD_LABEL: Record<string, string> = {
+  steam_openid: "Steam sign-in", battlenet_oauth: "Battle.net sign-in", discord_connection: "Discord-verified connection",
+  profile_code: "profile code check", manual_review: "moderator review",
+};
+
+/** D9: a Verified badge always says HOW ownership was verified. */
+export function IdentityBadge({ status, method }: { status: string; method?: string | null }) {
   const m = IDENTITY_META[status] ?? IDENTITY_META.unverified;
+  const how = status === "verified" && method ? VERIFY_METHOD_LABEL[method] : null;
   return (
-    <span className={`chip ${m.cls}`} title={m.desc}>
+    <span className={`chip ${m.cls}`} title={how ? `Ownership confirmed via ${how}.` : m.desc}>
       <m.Icon className="h-3.5 w-3.5" aria-hidden="true" />
-      {m.label}
+      {m.label}{how ? ` · ${how}` : ""}
     </span>
   );
 }

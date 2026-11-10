@@ -10,15 +10,17 @@ export default function HowItWorks() {
       <p>A player profile represents one gaming identity: a username on a specific game and platform. Anyone signed in with two-factor authentication can add a player who isn&apos;t listed yet. Profiles with the same username are <strong>never merged automatically</strong>. Each has its own ServerSentry ID.</p>
       <h2>2. Identity status</h2>
       <ul>
-        <li><strong>Verified:</strong> ownership confirmed through the platform&apos;s official sign-in (currently Steam OpenID) or strong moderator-reviewed proof.</li>
+        <li><strong>Verified:</strong> ownership confirmed, and the badge always says how: the platform&apos;s official sign-in (Steam, Battle.net), a Discord-verified connection (PlayStation, Xbox, Riot, Epic and others), or a moderator-confirmed profile code.</li>
         <li><strong>Possible match:</strong> a moderator saw supporting signals, but ownership isn&apos;t confirmed.</li>
         <li><strong>Unverified:</strong> identified by username only. It may not belong to the person you think.</li>
         <li><strong>Unlinked:</strong> the owner removed the link.</li>
       </ul>
       <h2>3. Commendations</h2>
-      <p>Recognise good teammates in one click. Plain commendations appear immediately; written comments are checked by a moderator first. You can give each player each type of commendation once, and there are daily limits to stop fake praise.</p>
+      <p>Recognise good teammates in one click. You can give each player one commendation a day, and each type only once ever, so at most seven per player. Commendations from accounts under three days old are checked first. Written comments are a Plus feature and are always checked by a moderator.</p>
+      <h2>Votes</h2>
+      <p>Any member with two-factor authentication can upvote or downvote a player once, and change or remove that vote any time. Who voted is private. Votes from accounts under three days old are saved but only count after three days, and moderators are alerted to sudden pile-ons.</p>
       <h2>4. Reports</h2>
-      <p>Reports are private when submitted. A moderator reviews each one, may ask for more information, and either rejects it or publishes a <strong>neutral, moderator-written summary</strong>. We never publish the reporter&apos;s identity, their raw description or any evidence.</p>
+      <p>Reports are private when submitted, and they don&apos;t change anyone&apos;s public numbers until a moderator publishes them. A moderator reviews each one, may ask for more information, and either rejects it or publishes a <strong>neutral, moderator-written summary</strong>. We never publish the reporter&apos;s identity, their raw description or any evidence.</p>
       <p>Published reports are labelled clearly:</p>
       <ul>
         <li><strong>Allegation:</strong> a moderated community report. It is not proof of misconduct.</li>

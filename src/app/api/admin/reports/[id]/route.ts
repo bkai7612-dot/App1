@@ -59,14 +59,14 @@ export const POST = route({ permission: "mod.reports.review", body: Body, rate: 
         if (r.reporter_user_id) await notify(tx, r.reporter_user_id, "report_update", `Your report ${r.public_ref} was reviewed and not published`, undefined, "/me/reports");
         break;
       case "remove":
-        await tx.q(`UPDATE reports SET status = 'removed', outcome_type = 'removed', closed_at = now() WHERE id = $1`, [r.id]);
+        await tx.q(`UPDATE reports SET status = 'removed', outcome_type = 'removed', outcome_note = coalesce(outcome_note, 'Removed by a senior moderator after review.'), closed_at = now() WHERE id = $1`, [r.id]);
         await tx.q(`UPDATE report_evidence SET delete_after = now() + interval '90 days' WHERE report_id = $1 AND delete_after IS NULL`, [r.id]);
-        if (r.owner_user_id) await notify(tx, r.owner_user_id, "report_disputed", "A report about your account was removed", undefined, `/players/${r.public_id}?tab=negative`);
+        if (r.owner_user_id) await notify(tx, r.owner_user_id, "report_disputed", `Report ${r.public_ref} about your account was removed`, "It's no longer shown publicly. You can see the reason on your profile's Negative Reports tab.", `/players/${r.public_id}?tab=negative`);
         break;
       case "resolve":
         await tx.q(`UPDATE reports SET status = 'resolved', outcome_type = $2, outcome_note = $3, resolved_at = now(), closed_at = now() WHERE id = $1`, [r.id, body.outcomeType, body.outcomeNote]);
         await tx.q(`UPDATE report_evidence SET delete_after = now() + interval '180 days' WHERE report_id = $1 AND delete_after IS NULL`, [r.id]);
-        if (r.owner_user_id) await notify(tx, r.owner_user_id, "report_disputed", "A moderation outcome was recorded on a report about you", undefined, `/players/${r.public_id}?tab=negative`);
+        if (r.owner_user_id) await notify(tx, r.owner_user_id, "report_disputed", body.outcomeType === "upheld" ? `Report ${r.public_ref}: the report was upheld` : `Report ${r.public_ref}: not upheld and removed from public view`, `Outcome: ${body.outcomeNote}`.slice(0, 480), `/players/${r.public_id}?tab=negative`);
         break;
     }
     const note = "note" in body ? body.note : "publicSummary" in body ? `Summary: ${body.publicSummary}` : "outcomeNote" in body ? `${body.outcomeType}: ${body.outcomeNote}` : null;

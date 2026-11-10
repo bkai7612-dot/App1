@@ -51,7 +51,10 @@ export async function POST(req: NextRequest) {
     const auth = await getAuth();
     await requireAuthLevel(auth, "mfa");
     const me = auth!;
-    if (me.user.reportingRestricted) throw forbidden("Your reporting permissions are currently restricted.");
+    if (me.user.reportingRestricted) {
+      const until = await withDb(SYSTEM, (tx) => tx.one<{ u: Date }>(`SELECT reporting_restricted_until AS u FROM users WHERE id = $1`, [me.user.id]));
+      throw forbidden(`A moderator has paused reporting on your account until ${until?.u ? until.u.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "further notice"}. If you think this is a mistake, use the complaints page.`);
+    }
     if (Date.now() - me.user.createdAt.getTime() < env.reportMinAccountAgeHours * 3600_000)
       throw forbidden(`New accounts can submit reports after ${env.reportMinAccountAgeHours} hours.`);
     if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY) throw new ApiError(413, "TOO_LARGE", "Upload too large.");

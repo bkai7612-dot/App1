@@ -48,11 +48,11 @@ export async function startBattlenetVerification(tx: Tx, userId: string, profile
 export async function startCodeChallenge(tx: Tx, userId: string, profileId: string, kind: Kind, gamingAccountId: string | null, note: string | null) {
   await cancelPendingVerifications(userId, profileId, kind, gamingAccountId);
   const code = publicId("SS", 6);
-  await tx.q(
+  const row = await tx.one<{ id: string }>(
     `INSERT INTO account_verifications (user_id, player_profile_id, gaming_account_id, kind, method, challenge_code, claim_note, expires_at)
-     VALUES ($1, $2, $3, $4, 'profile_code', $5, $6, now() + interval '14 days')`,
+     VALUES ($1, $2, $3, $4, 'profile_code', $5, $6, now() + interval '14 days') RETURNING id`,
     [userId, profileId, gamingAccountId, kind, code, note]);
-  return code;
+  return { code, id: row!.id };
 }
 
 export type VerifyRow = { id: string; user_id: string; player_profile_id: string; gaming_account_id: string | null; kind: string; handoff: boolean; email: string; display_name: string };

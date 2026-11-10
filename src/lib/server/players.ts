@@ -87,6 +87,7 @@ export interface PlayerProfile extends PlayerSummary {
   platform_id: number;
   platform_integration: string;
   identifier_label: string;
+  identity_method: string | null;
 }
 
 export interface ReputationStats {
@@ -106,6 +107,7 @@ export async function getProfileByPublicId(publicId: string, ctx: DbContext = GU
     `SELECT p.id, p.public_id, p.display_name, g.name AS game_name, g.slug AS game_slug, pl.name AS platform_name, pl.slug AS platform_slug,
             p.platform_user_id, ${IDENTITY_SQL} AS identity_status, (p.owner_user_id IS NOT NULL) AS claimed, p.owner_user_id,
             p.game_id, p.platform_id, pl.integration_status AS platform_integration, pl.identifier_label,
+            (SELECT ga.verification_method FROM gaming_accounts ga WHERE ga.player_profile_id = p.id AND ga.verification_status = 'verified' ORDER BY ga.last_verified_at DESC NULLS LAST LIMIT 1) AS identity_method,
             0 AS positive_total, 0 AS negative_published, 0 AS upvotes, 0 AS downvotes, p.last_active_at, p.created_at, p.is_demo
      FROM player_profiles p JOIN games g ON g.id = p.game_id JOIN platforms pl ON pl.id = p.platform_id
      WHERE p.public_id = $1 AND p.deleted_at IS NULL`, [publicId]));

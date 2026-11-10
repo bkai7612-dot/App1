@@ -60,12 +60,19 @@ export default async function PlayerPage({ params, searchParams }: Props) {
   const canVote = !!viewer && !isOwner && viewer.user.mfaEnabled && viewer.session.mfaVerified && viewer.user.emailVerified;
   const voteReason = !viewer ? "Sign in to vote (free)." : isOwner ? "You can't vote on your own profile." : "Set up two-factor authentication in Account Settings to vote.";
 
+  const staff = !!viewer?.staffActive;
+  // Moderators and the owner see everything; Plus unlocks written content for everyone else.
+  const fullContent = plus || isOwner || staff;
+  // D2: unreviewed submissions are only shown to the profile owner and moderators (stops brigades changing public stats).
+  const privateStats = isOwner || staff;
   const STAT_ROWS = [
-    { label: "Total submissions", value: stats.reports_total, help: "All negative reports ever submitted about this profile, in any state." },
-    { label: "Published entries", value: stats.negative_published, help: "Reports a moderator reviewed and published as allegations (including disputed, under appeal, or upheld)." },
-    { label: "Pending moderation", value: stats.reports_pending + stats.positive_pending, help: "Reports and commendation comments awaiting moderator review. Not visible publicly." },
-    { label: "Disputed entries", value: stats.reports_disputed, help: "Published reports the profile owner has responded to or appealed." },
-    { label: "Rejected or removed", value: stats.reports_rejected_removed, help: "Reports that did not meet our guidelines or were removed after review or appeal." },
+    { label: "Published reports", value: stats.negative_published, help: "Reports a moderator reviewed and published as allegations (including disputed, under appeal, or upheld)." },
+    { label: "Disputed by the player", value: stats.reports_disputed, help: "Published reports the player has responded to or appealed." },
+    { label: "Rejected or removed", value: stats.reports_rejected_removed, help: "Reports that did not meet our guidelines, or were removed after review or appeal." },
+    ...(privateStats ? [
+      { label: "Total submissions (private)", value: stats.reports_total, help: "Only visible to you and moderators: every report ever submitted, in any state." },
+      { label: "Awaiting moderation (private)", value: stats.reports_pending + stats.positive_pending, help: "Only visible to you and moderators. Unreviewed reports and comments are never shown publicly." },
+    ] : []),
   ];
 
   return (
@@ -80,8 +87,10 @@ export default async function PlayerPage({ params, searchParams }: Props) {
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <IdentityBadge status={profile.identity_status} />
-                {profile.claimed && <span className="chip border-violet-brand/40 bg-violet-brand/10 text-violet-lavender"><UserCheck className="h-3.5 w-3.5" /> Claimed by owner</span>}
+                <IdentityBadge status={profile.identity_status} method={profile.identity_method} />
+                {profile.claimed && (profile.identity_status === "verified"
+                  ? <span className="chip border-violet-brand/40 bg-violet-brand/10 text-violet-lavender"><UserCheck className="h-3.5 w-3.5" /> Owner verified</span>
+                  : <span className="chip border-ink-line text-text-muted" title="Someone has claimed this profile but hasn't proven they own the gaming account yet."><UserCheck className="h-3.5 w-3.5" /> Claimed · identity not yet verified</span>)}
                 {profile.is_demo && <DemoBadge />}
               </div>
               <h1 id="player-name" className="mt-3 break-words font-display text-3xl font-semibold tracking-tight sm:text-4xl">{profile.display_name}</h1>
@@ -99,7 +108,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
               {!isOwner && (
                 <Link href={viewer ? `/players/${profile.public_id}/report` : `/login?next=/players/${profile.public_id}/report`} className="btn-ghost"><Flag className="h-4 w-4" /> Report behaviour</Link>
               )}
-              {!profile.claimed && <ClaimProfileButton profileId={profile.id} signedIn={!!viewer} platformName={profile.platform_name} options={claimOptions} />}
+              {!profile.claimed && profile.identity_status !== "verified" && <ClaimProfileButton profileId={profile.id} signedIn={!!viewer} platformName={profile.platform_name} options={claimOptions} />}
             </div>
           </div>
           <div className="mt-6">
@@ -107,13 +116,13 @@ export default async function PlayerPage({ params, searchParams }: Props) {
             <VoteButtons profileId={profile.id} initial={{ upvotes: votes.upvotes, downvotes: votes.downvotes, myVote: votes.myVote }} canVote={canVote} reason={canVote ? undefined : voteReason} />
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:max-w-md">
-            <div className="rounded-xl border border-pos/25 bg-pos/[0.07] p-4">
-              <p className="flex items-center gap-1.5 font-display text-3xl font-semibold text-pos"><ThumbsUp className="h-6 w-6" />+{stats.positive_total}</p>
-              <p className="mt-1 text-xs text-text-muted">Positive commendations</p>
+            <div className="rounded-xl border border-ink-line bg-white/[0.03] p-4">
+              <p className="flex items-center gap-2 font-display text-3xl font-semibold"><ThumbsUp className="h-6 w-6 text-pos" aria-hidden="true" />{stats.positive_total}</p>
+              <p className="mt-1 text-xs text-text-muted">Commendations</p>
             </div>
-            <div className="rounded-xl border border-neg/25 bg-neg/[0.07] p-4">
-              <p className="flex items-center gap-1.5 font-display text-3xl font-semibold text-neg"><ShieldAlert className="h-6 w-6" />−{stats.negative_published}</p>
-              <p className="mt-1 text-xs text-text-muted">Published negative reports</p>
+            <div className="rounded-xl border border-ink-line bg-white/[0.03] p-4">
+              <p className="flex items-center gap-2 font-display text-3xl font-semibold"><ShieldAlert className="h-6 w-6 text-amber-300" aria-hidden="true" />{stats.negative_published}</p>
+              <p className="mt-1 text-xs text-text-muted">Published reports{stats.reports_disputed > 0 ? ` · ${stats.reports_disputed} disputed` : ""}</p>
             </div>
           </div>
         </section>
@@ -135,7 +144,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
                 <dl className="mt-5 divide-y divide-ink-line">
                   <div className="flex items-start justify-between gap-4 py-3">
                     <dt><span className="text-sm">Positive commendations</span><p className="text-xs text-text-muted">Approved recognitions from other members.</p></dt>
-                    <dd className="font-display text-lg font-semibold text-pos">+{stats.positive_total}</dd>
+                    <dd className="font-display text-lg font-semibold">{stats.positive_total}</dd>
                   </div>
                   {STAT_ROWS.map((r) => (
                     <div key={r.label} className="flex items-start justify-between gap-4 py-3">
@@ -159,18 +168,17 @@ export default async function PlayerPage({ params, searchParams }: Props) {
           )}
 
           {tab === "positive" && (
-            plus ? <PositiveList profileId={profile.id} /> :
+            fullContent ? <PositiveList profileId={profile.id} /> :
             <PremiumLock title="Unlock Player Feedback" text="See what other players have said about this account." returnTo={returnTo} signedIn={!!viewer} />
           )}
 
           {tab === "comments" && (
-            plus || isOwner ? <CommentsList profileId={profile.id} isOwner={isOwner} plus={plus} /> :
+            fullContent ? <CommentsList profileId={profile.id} isOwner={isOwner} plus={plus} /> :
             <PremiumLock title="Unlock Player Comments" text="Read moderated comments from other players, and write your own." returnTo={returnTo} signedIn={!!viewer} />
           )}
 
           {tab === "negative" && (
-            plus || isOwner ? <NegativeList profileId={profile.id} ownerUserId={isOwner ? viewer!.user.id : null} plus={plus} identity={profile.identity_status} /> :
-            <PremiumLock title="Unlock Report Summaries" text="Read moderated report summaries, categories, dates and dispute or resolution status." returnTo={returnTo} signedIn={!!viewer} />
+            <NegativeList profileId={profile.id} ownerUserId={isOwner ? viewer!.user.id : null} plus={plus} full={fullContent} identity={profile.identity_status} claimed={profile.claimed} returnTo={returnTo} signedIn={!!viewer} />
           )}
 
           {tab === "linked" && (
@@ -191,7 +199,7 @@ export default async function PlayerPage({ params, searchParams }: Props) {
           )}
 
           {tab === "history" && (
-            plus ? <History profileId={profile.id} /> :
+            fullContent ? <History profileId={profile.id} /> :
             <PremiumLock title="Unlock Reputation History" text="See how this player's feedback has changed month by month." returnTo={returnTo} signedIn={!!viewer} />
           )}
         </div>
@@ -246,43 +254,71 @@ async function CommentsList({ profileId, isOwner, plus }: { profileId: string; i
   );
 }
 
-async function NegativeList({ profileId, ownerUserId, plus, identity }: { profileId: string; ownerUserId: string | null; plus: boolean; identity: string }) {
+async function NegativeList({ profileId, ownerUserId, plus, full, identity, claimed, returnTo, signedIn }: {
+  profileId: string; ownerUserId: string | null; plus: boolean; full: boolean; identity: string; claimed: boolean; returnTo: string; signedIn: boolean;
+}) {
   const items = await getPublicReports(profileId);
-  let ownerState: Record<string, { response: string | null; appeal: string | null }> = {};
+  let ownerState: Record<string, { response: string | null; response_body: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null; response_id: string | null }> = {};
+  let closed: { id: string; public_ref: string; category: string; status: string; outcome_type: string | null; outcome_note: string | null; closed_at: Date | null }[] = [];
   if (ownerUserId) {
-    const rows = await withDb(SYSTEM, (tx) => tx.q<{ report_id: string; response: string | null; appeal: string | null }>(
+    const rows = await withDb(SYSTEM, (tx) => tx.q<{ report_id: string; response: string | null; response_body: string | null; response_id: string | null; appeal: string | null; appeal_id: string | null; appeal_note: string | null }>(
       `SELECT r.id AS report_id,
-         (SELECT status FROM report_responses x WHERE x.report_id = r.id AND x.author_user_id = $2 ORDER BY created_at DESC LIMIT 1) AS response,
-         (SELECT status FROM report_appeals a WHERE a.report_id = r.id AND a.appellant_user_id = $2 ORDER BY created_at DESC LIMIT 1) AS appeal
-       FROM public_reports r WHERE r.player_profile_id = $1`, [profileId, ownerUserId]));
+         x.status AS response, x.body AS response_body, x.id AS response_id,
+         a.status AS appeal, a.id AS appeal_id, a.decision_note AS appeal_note
+       FROM public_reports r
+       LEFT JOIN LATERAL (SELECT id, status, body FROM report_responses x WHERE x.report_id = r.id AND x.author_user_id = $2 AND x.status <> 'withdrawn' ORDER BY created_at DESC LIMIT 1) x ON true
+       LEFT JOIN LATERAL (SELECT id, status, decision_note FROM report_appeals a WHERE a.report_id = r.id AND a.appellant_user_id = $2 AND a.status <> 'withdrawn' ORDER BY created_at DESC LIMIT 1) a ON true
+       WHERE r.player_profile_id = $1`, [profileId, ownerUserId]));
     ownerState = Object.fromEntries(rows.map((r) => [r.report_id, r]));
+    // T-06: owners also see reports that were removed or not upheld, with the reason.
+    closed = await withDb(SYSTEM, (tx) => tx.q(
+      `SELECT r.id, r.public_ref, r.category, r.status, r.outcome_type, r.outcome_note, r.closed_at FROM reports r
+       WHERE r.player_profile_id = $1 AND r.deleted_at IS NULL AND r.published_at IS NOT NULL
+         AND (r.status = 'removed' OR (r.status = 'resolved' AND r.outcome_type <> 'upheld')) ORDER BY r.closed_at DESC NULLS LAST`, [profileId]));
   }
+  const owner = !!ownerUserId;
   return (
     <div className="space-y-4">
-      {identity !== "verified" && !ownerUserId && <Notice tone="warn"><strong>Identity unverified.</strong> Nobody has proven they own this {"account"} yet. These reports are about whoever uses this username on this game and platform, which may not be the person you have in mind. If the owner verifies later, they can respond and appeal.</Notice>}
-      {ownerUserId && !plus && <Notice>You are the verified owner of this profile, so you can see published reports about you and respond or appeal for free.</Notice>}
+      {identity !== "verified" && !owner && <Notice tone="warn"><strong>Identity unverified.</strong> Nobody has proven they own this account yet. These reports are about whoever uses this username on this game and platform, which may not be the person you have in mind.{claimed ? " Someone has claimed the profile but hasn't verified it yet." : ""} If the owner verifies, they can respond and appeal.</Notice>}
+      {owner && <Notice>{identity === "verified" ? "You're the verified owner of this profile." : "You've claimed this profile (verification is still pending)."} You can read every report about you, respond and appeal, all for free.</Notice>}
+      {!full && items.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-violet-brand/30 bg-violet-brand/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <p>Status, category, dates and the player&apos;s responses are free for everyone. <strong>ServerSentry Plus</strong> adds the moderator&apos;s written summary of each report.</p>
+          <a href={signedIn ? `/pricing?from=${encodeURIComponent(returnTo)}` : `/login?next=${encodeURIComponent(returnTo)}`} className="btn-primary shrink-0">See Plus · £0.99/month</a>
+        </div>
+      )}
       {items.length === 0 ? <Empty title="No published reports">No reports about this profile have been published by moderators.</Empty> : (
         <ul className="grid gap-3">
           {items.map((r) => (
             <li key={r.id} className="glass p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <ReportStatusBadge status={r.status} />
-                {identity !== "verified" && <span className="chip border-amber-400/40 text-amber-300">Identity unverified</span>}
                 <span className="chip border-ink-line text-text-muted">{REPORT_LABELS[r.category]}</span>
+                {r.response && <span className="chip border-sky-400/40 text-sky-300">Player responded</span>}
                 <span className="ml-auto text-xs text-text-muted">Ref {r.public_ref} · published {fmtDate(r.published_at)}{r.is_demo ? " · demo" : ""}</span>
               </div>
               <p className="mt-3 text-xs uppercase tracking-wider text-text-muted">Moderator summary of the allegation</p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm">{r.public_summary}</p>
+              {full ? <p className="mt-1 whitespace-pre-wrap break-words text-sm">{r.public_summary}</p>
+                : <p className="mt-1 select-none text-sm text-text-muted"><span aria-hidden="true" className="blur-[4px]">A community member alleges that this player behaved in a way that</span> <span className="ml-1 rounded bg-violet-brand/20 px-1.5 py-0.5 text-xs text-violet-lavender">Plus</span></p>}
               {r.status === "resolved" && r.outcome_note && (
                 <div className="mt-3 rounded-lg border border-violet-brand/30 bg-violet-brand/10 p-3 text-sm"><p className="text-xs uppercase tracking-wider text-violet-lavender">Moderation outcome · {fmtDate(r.resolved_at)}</p><p className="mt-1">{r.outcome_note}</p></div>
               )}
               {r.response && (
-                <div className="mt-3 rounded-lg border border-ink-line bg-white/[0.02] p-3 text-sm"><p className="text-xs uppercase tracking-wider text-text-muted">Player&apos;s response</p><p className="mt-1 whitespace-pre-wrap break-words">{r.response}</p></div>
+                <div className="mt-3 rounded-lg border border-ink-line bg-white/[0.02] p-3 text-sm"><p className="text-xs uppercase tracking-wider text-text-muted">Player&apos;s response (free to read)</p><p className="mt-1 whitespace-pre-wrap break-words">{r.response}</p></div>
               )}
-              {ownerUserId && <OwnerReportActions reportId={r.id} status={r.status} responseStatus={ownerState[r.id]?.response ?? null} appealStatus={ownerState[r.id]?.appeal ?? null} />}
+              {owner && <OwnerReportActions reportId={r.id} status={r.status} state={ownerState[r.id] ?? null} />}
             </li>
           ))}
         </ul>
+      )}
+      {owner && closed.length > 0 && (
+        <section className="glass p-5">
+          <h3 className="font-display font-semibold">Removed or not upheld</h3>
+          <p className="text-xs text-text-muted">These are no longer shown publicly. Only you can see this list.</p>
+          <ul className="mt-3 divide-y divide-ink-line text-sm">{closed.map((c) => (
+            <li key={c.id} className="py-2"><span className="chip border-pos/40 text-pos">{c.status === "removed" ? "Removed" : "Not upheld"}</span> <span className="ml-1">{REPORT_LABELS[c.category]} · Ref {c.public_ref}{c.closed_at ? ` · ${fmtDate(c.closed_at)}` : ""}</span>
+              {c.outcome_note && <p className="mt-1 text-text-muted">Reason: {c.outcome_note}</p>}</li>))}</ul>
+        </section>
       )}
     </div>
   );

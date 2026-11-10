@@ -38,15 +38,53 @@ export function VerifyOptions({ options, onPick, busy, target }: { options: Opti
   );
 }
 
-export function CodeInstructions({ code, platform }: { code: string; platform: string }) {
+/** Where each platform lets players show text publicly (T-13). Platforms without a public bio use a private screenshot. */
+const CODE_WHERE: Record<string, string> = {
+  "Steam": "your Steam profile summary (Edit Profile → About)",
+  "Xbox": "your Xbox profile bio (Profile → Customise profile → Bio)",
+  "PlayStation Network": "your PlayStation \"About me\" (Profile → Edit profile → About me)",
+  "Roblox": "your Roblox profile \"About\" section",
+  "Battle.net": "",
+};
+const NO_BIO_HELP = "doesn't have a public bio, so take a screenshot of your signed-in account page that shows your username, with the code typed somewhere visible (for example in your browser's address bar or a note beside it), and attach it below. Only moderators can see it.";
+
+export function CodeInstructions({ code, platform, verificationId }: { code: string; platform: string; verificationId?: string | null }) {
+  const router = useRouter();
+  const where = CODE_WHERE[platform];
+  const [url, setUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const placed = async (e: React.FormEvent) => {
+    e.preventDefault(); if (!verificationId) return;
+    setBusy(true); setErr(null);
+    const fd = new FormData(); if (url) fd.set("profileUrl", url); if (file) fd.set("screenshot", file);
+    try {
+      const res = await fetch(`/api/identity/verifications/${verificationId}/placed`, { method: "POST", body: fd, headers: { "x-ss-csrf": "1" }, credentials: "same-origin" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error?.message ?? "Couldn't send that.");
+      setMsg("Thanks: a moderator has been told your code is in place. You'll get a notification when they've checked it."); router.refresh();
+    } catch (x) { setErr(x instanceof Error ? x.message : "Couldn't send that."); } finally { setBusy(false); }
+  };
   return (
     <div className="mt-3 rounded-xl border border-violet-brand/40 bg-violet-brand/10 p-4 text-sm">
       <p className="font-semibold">Your verification code: <span className="font-mono text-lg tracking-wider text-violet-lavender">{code}</span></p>
       <ol className="mt-2 list-inside list-decimal space-y-1 text-text-muted">
-        <li>Open your {platform} profile and paste <b className="text-text">{code}</b> into a public field: bio, &ldquo;about me&rdquo;, status or real-name field.</li>
-        <li>Leave it there until a moderator confirms (usually within a day). You&apos;ll get a notification.</li>
+        {where ? <li>Paste <b className="text-text">{code}</b> into {where}. It must be publicly visible.</li>
+          : <li>{platform} {NO_BIO_HELP}</li>}
+        <li>Press <b className="text-text">I&apos;ve placed the code</b> below. A moderator checks it, usually within a day, and you&apos;ll get a notification.</li>
         <li>You can remove the code once you&apos;re verified.</li>
       </ol>
+      {verificationId && !msg && (
+        <form onSubmit={placed} className="mt-3 grid gap-2 sm:grid-cols-2">
+          <label className="block"><span className="label">Link to your public profile (optional)</span><input type="url" inputMode="url" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} className="input" /></label>
+          <label className="block"><span className="label">Screenshot (optional, private to moderators)</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="input" /></label>
+          <div className="sm:col-span-2"><button disabled={busy} className="btn-primary">{busy && <span className="spinner" />}I&apos;ve placed the code</button></div>
+        </form>
+      )}
+      {msg && <p role="status" className="mt-3 text-pos">{msg}</p>}
+      {err && <p role="alert" className="mt-3 text-neg">{err}</p>}
       <p className="mt-2 text-xs text-text-muted">The code expires in 14 days. Never share your password with anyone, including ServerSentry staff.</p>
     </div>
   );
@@ -59,14 +97,16 @@ export function LinkedAccountsManager({ profiles, platforms, accounts }: { profi
   const [busy, setBusy] = useState(false);
   const [openFor, setOpenFor] = useState<string | null>(null);
   const [codes, setCodes] = useState<Record<string, string>>({});
+  const [codeIds, setCodeIds] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ playerProfileId: profiles[0]?.id, platformSlug: "", username: "" });
 
   const verify = async (a: Account, method: string) => {
     setErr(null); setBusy(true);
     try {
-      const r = await api<{ redirect?: string; code?: string }>(`/api/identity/accounts/${a.id}/verify`, { body: { method } });
+      const r = await api<{ redirect?: string; code?: string; verificationId?: string }>(`/api/identity/accounts/${a.id}/verify`, { body: { method } });
       if (r.redirect) { window.location.assign(r.redirect); return; }
       if (r.code) setCodes((c) => ({ ...c, [a.id]: r.code! }));
+      if (r.verificationId) setCodeIds((c) => ({ ...c, [a.id]: r.verificationId! }));
       setOpenFor(null); router.refresh();
     } catch (e) { setErr(e); } finally { setBusy(false); }
   };
@@ -96,7 +136,7 @@ export function LinkedAccountsManager({ profiles, platforms, accounts }: { profi
                     </span>
                   </div>
                   {openFor === a.id && <VerifyOptions options={a.options} busy={busy} onPick={(m) => verify(a, m)} target={{ gamingAccountId: a.id }} />}
-                  {code && a.verification_status !== "verified" && <CodeInstructions code={code} platform={a.platform} />}
+                  {code && a.verification_status !== "verified" && <CodeInstructions code={code} platform={a.platform} verificationId={codeIds[a.id] ?? a.pendingId} />}
                   {a.pending && a.pendingId && a.verification_status !== "verified" && (
                     <button className="btn-ghost mt-3 px-3 py-1.5 text-xs" disabled={busy} onClick={async () => {
                       setErr(null); setBusy(true);

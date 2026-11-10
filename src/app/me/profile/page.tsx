@@ -52,9 +52,9 @@ export default async function MyProfile() {
           <>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {tile(`/players/${first.public_id}`, Eye, "My public profile", profiles.length === 1 ? first.display_name : `${profiles.length} profiles`, "See exactly what other players see")}
-              {tile(`/players/${first.public_id}?tab=positive`, ThumbsUp, "Commendations received", `+${sum("positive")}`, "Recognition from other players", "text-pos")}
+              {tile(`/players/${first.public_id}?tab=positive`, ThumbsUp, "Commendations received", sum("positive"), "Recognition from other players")}
               {tile(`/players/${first.public_id}?tab=comments`, MessageSquare, "Comments on my account", sum("comments"), "Free to read; report any that are inaccurate")}
-              {tile("/me/reports", ShieldAlert, "Reports about me", `−${sum("negative")}`, "Read, respond and appeal for free", "text-neg")}
+              {tile("/me/reports", ShieldAlert, "Reports about me", sum("negative"), "Published reports: read, respond and appeal for free")}
               <div className="glass flex items-start gap-3 p-5"><ArrowBigUp className="mt-0.5 h-5 w-5 text-pos" aria-hidden="true" /><span><span className="block text-sm text-text-muted">Community votes</span><span className="block font-display text-2xl font-semibold tabular-nums"><span className="text-pos">{sum("up")}</span> <span className="text-text-muted">/</span> <span className="text-neg">{sum("down")}</span><ArrowBigDown className="ml-1 inline h-5 w-5 text-neg" aria-hidden="true" /></span><span className="block text-xs text-text-muted">Upvotes / downvotes</span></span></div>
               {tile("/me/linked-accounts", Link2, "Linked accounts", profiles.filter((p) => p.verified).length + " verified", "Add or verify gaming accounts")}
             </div>
@@ -63,7 +63,7 @@ export default async function MyProfile() {
                 <li key={p.public_id}><Link href={`/players/${p.public_id}`} className="glass flex flex-wrap items-center gap-3 p-4 hover:shadow-glow">
                   <span className="font-semibold">{p.display_name}</span><IdentityBadge status={p.verified ? "verified" : "unverified"} />
                   <span className="text-sm text-text-muted">{p.game} · {p.platform} · {p.public_id}</span>
-                  <span className="ml-auto text-sm"><span className="text-pos">+{p.positive}</span> · <span className="text-neg">−{p.negative}</span> · ▲{p.up} ▼{p.down}</span>
+                  <span className="ml-auto text-sm text-text-muted">{p.positive} commendations · {p.negative} published reports · ▲{p.up} ▼{p.down}</span>
                 </Link></li>))}</ul>
             )}
           </>

@@ -27,11 +27,12 @@ export default async function Queues() {
     commendations: await tx.q<{ id: string; category: string; comment: string | null; created_at: Date; player: string; public_id: string; mine: boolean }>(
       `SELECT c.id, c.category, c.comment, c.created_at, p.display_name AS player, p.public_id, (c.submitter_user_id = $1 OR p.owner_user_id = $1) AS mine
        FROM commendations c JOIN player_profiles p ON p.id = c.player_profile_id WHERE c.status = 'pending' ORDER BY c.created_at LIMIT 100`, [me]),
-    verifications: await tx.q<{ id: string; kind: string; method: string; claim_note: string | null; verified_platform_user_id: string | null; created_at: Date; player: string; public_id: string; platform: string; claimant: string; username: string | null; mine: boolean; challenge_code: string | null }>(
-      `SELECT v.id, v.kind, v.method, v.claim_note, v.verified_platform_user_id, v.created_at, v.challenge_code, p.display_name AS player, p.public_id, pl.name AS platform, u.display_name AS claimant, ga.username, (v.user_id = $1) AS mine
+    verifications: await tx.q<{ id: string; kind: string; method: string; claim_note: string | null; verified_platform_user_id: string | null; created_at: Date; player: string; public_id: string; platform: string; claimant: string; username: string | null; mine: boolean; challenge_code: string | null; profile_url: string | null; has_shot: boolean; code_placed_at: Date | null }>(
+      `SELECT v.id, v.kind, v.method, v.claim_note, v.verified_platform_user_id, v.created_at, v.challenge_code, v.profile_url, (v.evidence_key IS NOT NULL) AS has_shot, v.code_placed_at, p.display_name AS player, p.public_id, pl.name AS platform, u.display_name AS claimant, ga.username, (v.user_id = $1) AS mine
        FROM account_verifications v JOIN player_profiles p ON p.id = v.player_profile_id JOIN platforms pl ON pl.id = p.platform_id JOIN users u ON u.id = v.user_id
        LEFT JOIN gaming_accounts ga ON ga.id = v.gaming_account_id
-       WHERE v.status = 'pending' AND v.method IN ('manual_review','profile_code') ORDER BY v.created_at LIMIT 100`, [me]),
+       WHERE v.status = 'pending' AND v.method IN ('manual_review','profile_code') AND (v.expires_at IS NULL OR v.expires_at > now())
+       ORDER BY (v.method = 'profile_code' AND v.code_placed_at IS NULL), v.code_placed_at NULLS LAST, v.created_at LIMIT 100`, [me]),
     responses: await tx.q<{ id: string; body: string; report_id: string; public_ref: string }>(
       `SELECT x.id, x.body, x.report_id, r.public_ref FROM report_responses x JOIN reports r ON r.id = x.report_id WHERE x.status = 'pending' ORDER BY x.created_at LIMIT 100`),
     appeals: await tx.q<{ id: string; report_id: string; public_ref: string; status: string; created_at: Date }>(
@@ -94,6 +95,11 @@ export default async function Queues() {
           <div className="mt-4 grid gap-2">{q.verifications.length === 0 ? <Empty title="Queue empty" /> : q.verifications.map((v) => (
             <div key={v.id} className="glass p-4 text-sm">
               <p><strong>{v.kind === "profile_claim" ? "Profile claim" : "Link verification"}</strong> · {v.claimant} → <Link className="underline" href={`/players/${v.public_id}`}>{v.player}</Link> ({v.platform}){v.username ? ` · account "${v.username}"` : ""}</p>
+              {v.method === "profile_code" && (v.code_placed_at
+                ? <p className="mt-2 chip border-pos/40 text-pos">Player says the code is in place · {new Date(v.code_placed_at).toLocaleString("en-GB")}</p>
+                : <p className="mt-2 chip border-ink-line text-text-muted">Waiting for the player to place the code</p>)}
+              {v.profile_url && <p className="mt-2">Profile link: <a href={v.profile_url} target="_blank" rel="noopener noreferrer nofollow" className="break-all underline">{v.profile_url}</a> <span className="text-xs text-text-muted">(external site: opens in a new tab)</span></p>}
+              {v.has_shot && <p className="mt-1"><a href={`/api/admin/verifications/${v.id}/evidence`} target="_blank" rel="noopener noreferrer" className="underline">View private screenshot</a> <span className="text-xs text-text-muted">(access is logged)</span></p>}
               {v.challenge_code && <p className="mt-2 rounded-lg border border-violet-brand/40 bg-violet-brand/10 p-2">Code check: open the public {v.platform} profile of <b>{v.username ?? v.player}</b> and look for <span className="font-mono text-violet-lavender">{v.challenge_code}</span> in the bio, about me or status. Approve as verified only if you see it.</p>}
               {v.verified_platform_user_id && <p className="mt-1 text-pos">An official sign-in proved control of platform account ID {v.verified_platform_user_id}.</p>}
               {v.claim_note && <p className="mt-2 whitespace-pre-wrap rounded bg-ink/50 p-2">{v.claim_note}</p>}

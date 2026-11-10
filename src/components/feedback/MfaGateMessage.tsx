@@ -11,5 +11,6 @@ export function GateError({ error }: { error: unknown }) {
     if (error.code === "UNAUTHENTICATED") return <p role="alert" className="text-sm text-amber-300">Please <Link href="/login" className="underline">sign in</Link>.</p>;
     return <p role="alert" className="text-sm text-neg">{error.message}</p>;
   }
+  if (error instanceof Error && error.message) return <p role="alert" className="text-sm text-neg">{error.message}</p>;
   return <p role="alert" className="text-sm text-neg">Something went wrong.</p>;
 }

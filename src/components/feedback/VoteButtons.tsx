@@ -11,11 +11,16 @@ export function VoteButtons({ profileId, initial, canVote, reason }: {
   const [s, setS] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
+  const [held, setHeld] = useState<string | null>(null);
   const vote = async (v: 1 | -1) => {
     if (!canVote || busy) return;
     setBusy(true); setErr(null);
     const value = s.myVote === v ? 0 : v;
-    try { const r = await api<{ upvotes: number; downvotes: number; myVote: number }>("/api/votes", { body: { playerProfileId: profileId, value } }); setS(r); }
+    try {
+      const r = await api<{ upvotes: number; downvotes: number; myVote: number; heldUntil: string | null }>("/api/votes", { body: { playerProfileId: profileId, value } });
+      setS(r);
+      setHeld(r.heldUntil ? new Date(r.heldUntil).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null);
+    }
     catch (e) { setErr(e); } finally { setBusy(false); }
   };
   const base = "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed";
@@ -32,6 +37,7 @@ export function VoteButtons({ profileId, initial, canVote, reason }: {
         </button>
       </div>
       {!canVote && reason && <p className="mt-1.5 text-xs text-text-muted">{reason}</p>}
+      {held && <p role="status" className="mt-1.5 text-xs text-text-muted">Vote saved. Because your account is new, it will start counting on {held}. This protects players from fake-account pile-ons.</p>}
       <div className="mt-1.5"><GateError error={err} /></div>
     </div>
   );

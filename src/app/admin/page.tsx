@@ -21,6 +21,10 @@ export default async function AdminHome() {
     (SELECT count(*) FROM player_comments WHERE status = 'pending') AS pending_comments,
     (SELECT count(*) FROM comment_disputes WHERE status = 'open') AS open_disputes,
     (SELECT count(*) FROM player_votes) AS votes`));
+  const spikes = await withDb(auth.db, (tx) => tx.q<{ public_id: string; display_name: string; n: string; down: string; young: string }>(
+    `SELECT p.public_id, p.display_name, count(*) AS n, count(*) FILTER (WHERE v.value = -1) AS down, count(*) FILTER (WHERE v.counts_from > now()) AS young
+     FROM player_votes v JOIN player_profiles p ON p.id = v.player_profile_id
+     WHERE v.updated_at > now() - interval '24 hours' GROUP BY p.public_id, p.display_name HAVING count(*) >= 5 ORDER BY count(*) DESC LIMIT 10`));
   const subs = can(auth.user.role, "billing.view")
     ? await withDb(auth.db, (tx) => tx.one<{ n: string }>(`SELECT count(*) AS n FROM subscriptions WHERE status IN ('active','trialing') AND current_period_end > now()`))
     : null;
@@ -35,6 +39,15 @@ export default async function AdminHome() {
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(([l, v]) => <div key={l} className="glass p-5"><p className="text-xs uppercase tracking-wider text-text-muted">{l}</p><p className="mt-1 font-display text-2xl font-semibold">{v ?? "0"}</p></div>)}
       </div>
+      <section className="glass mt-8 p-6">
+        <h2 className="font-display text-lg font-semibold">Vote activity alerts <span className="text-sm font-normal text-text-muted">· last 24 hours, 5+ votes on one player</span></h2>
+        <p className="mt-1 text-sm text-text-muted">Sudden pile-ons may be brigading. Votes from accounts under 72 hours old are held and don&apos;t count yet.</p>
+        {spikes.length === 0 ? <p className="mt-3 text-sm text-text-muted">No unusual vote activity.</p> : (
+          <ul className="mt-3 divide-y divide-ink-line text-sm">{spikes.map((v) => (
+            <li key={v.public_id} className="flex flex-wrap items-center gap-3 py-2"><a className="underline" href={`/players/${v.public_id}`}>{v.display_name}</a><span className="text-text-muted">{v.public_id}</span>
+              <span className="ml-auto">{v.n} votes · {v.down} down · <span className={Number(v.young) > 0 ? "text-amber-300" : "text-text-muted"}>{v.young} held (new accounts)</span></span></li>))}</ul>
+        )}
+      </section>
       {can(auth.user.role, "system.launch_gates.view") && (
         <section className="glass mt-8 p-6">
           <h2 className="font-display text-lg font-semibold">Production launch gates <span className="text-sm font-normal text-text-muted">· mode: {env.launchMode}</span></h2>

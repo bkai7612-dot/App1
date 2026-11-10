@@ -4,7 +4,7 @@ import { withDb } from "@/lib/db";
 import { startSteamVerification, startDiscordVerification, startBattlenetVerification, startCodeChallenge } from "@/lib/server/identity";
 import { verificationOptions } from "@/lib/server/verification-options";
 import { audit } from "@/lib/server/audit";
-import { badRequest, conflict, notFound } from "@/lib/server/errors";
+import { badRequest, notFound } from "@/lib/server/errors";
 
 const Body = z.object({ method: z.enum(["steam", "battlenet", "discord", "code"]).optional(), note: z.string().trim().max(1000).optional() }).strict();
 
@@ -28,10 +28,10 @@ export const POST = route({ auth: "mfa", body: Body, rate: { name: "verify-start
     if (method === "steam") return { ok: true, redirect: await startSteamVerification(tx, auth!.user.id, ga.player_profile_id, "link_verification", ga.id) };
     if (method === "battlenet") return { ok: true, redirect: await startBattlenetVerification(tx, auth!.user.id, ga.player_profile_id, "link_verification", ga.id) };
     if (method === "discord") return { ok: true, redirect: await startDiscordVerification(tx, auth!.user.id, ga.player_profile_id, "link_verification", ga.id) };
-    const pending = await tx.one<{ challenge_code: string | null }>(`SELECT challenge_code FROM account_verifications WHERE user_id = $1 AND gaming_account_id = $2 AND status = 'pending' AND method = 'profile_code'`, [auth!.user.id, ga.id]);
-    if (pending?.challenge_code) throw conflict(`A code check is already pending. Your code is ${pending.challenge_code}.`);
-    const code = await startCodeChallenge(tx, auth!.user.id, ga.player_profile_id, "link_verification", ga.id, body.note ?? null);
+    const pending = await tx.one<{ id: string; challenge_code: string | null }>(`SELECT id, challenge_code FROM account_verifications WHERE user_id = $1 AND gaming_account_id = $2 AND status = 'pending' AND method = 'profile_code' AND expires_at > now()`, [auth!.user.id, ga.id]);
+    if (pending?.challenge_code) return { ok: true, pending: true, code: pending.challenge_code, verificationId: pending.id };
+    const ch = await startCodeChallenge(tx, auth!.user.id, ga.player_profile_id, "link_verification", ga.id, body.note ?? null);
     await audit(tx, auth!.user.id, "identity.verification_requested", { type: "gaming_account", id: ga.id }, { method: "profile_code" }, meta.ipHash);
-    return { ok: true, pending: true, code };
+    return { ok: true, pending: true, code: ch.code, verificationId: ch.id };
   });
 });

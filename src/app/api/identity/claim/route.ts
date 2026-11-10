@@ -24,8 +24,8 @@ export const POST = route({ auth: "mfa", body: Body, rate: { name: "claim", limi
     if (method === "steam") return { ok: true, redirect: await startSteamVerification(tx, auth!.user.id, p.id, "profile_claim", null) };
     if (method === "battlenet") return { ok: true, redirect: await startBattlenetVerification(tx, auth!.user.id, p.id, "profile_claim", null) };
     if (method === "discord") return { ok: true, redirect: await startDiscordVerification(tx, auth!.user.id, p.id, "profile_claim", null) };
-    const code = await startCodeChallenge(tx, auth!.user.id, p.id, "profile_claim", null, body.note ?? null);
+    const ch = await startCodeChallenge(tx, auth!.user.id, p.id, "profile_claim", null, body.note ?? null);
     await audit(tx, auth!.user.id, "identity.claim_requested", { type: "player_profile", id: p.id }, { method: "profile_code" }, meta.ipHash);
-    return { ok: true, pending: true, code };
+    return { ok: true, pending: true, code: ch.code, verificationId: ch.id };
   });
 });

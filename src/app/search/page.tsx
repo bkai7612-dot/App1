@@ -89,8 +89,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <span className="flex items-center gap-1 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-sm text-text-muted" title="Community votes: up / down"><ArrowBigUp className="h-4 w-4 text-pos" />{r.upvotes}<ArrowBigDown className="ml-1 h-4 w-4 text-neg" />{r.downvotes}</span>
-                          <span className="flex items-center gap-1.5 rounded-lg bg-pos/10 px-3 py-1.5 text-sm font-semibold text-pos" title="Positive commendations"><ThumbsUp className="h-4 w-4" />+{r.positive_total}</span>
-                          <span className="flex items-center gap-1.5 rounded-lg bg-neg/10 px-3 py-1.5 text-sm font-semibold text-neg" title="Published negative reports (moderated allegations)"><ShieldAlert className="h-4 w-4" />−{r.negative_published}</span>
+                          <span className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-3 py-1.5 text-sm font-semibold" title="Commendations"><ThumbsUp className="h-4 w-4 text-pos" aria-hidden="true" />{r.positive_total}<span className="sr-only"> commendations</span></span>
+                          <span className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-3 py-1.5 text-sm font-semibold" title="Published reports (moderated allegations)"><ShieldAlert className="h-4 w-4 text-amber-300" aria-hidden="true" />{r.negative_published}<span className="sr-only"> published reports</span></span>
                         </div>
                       </Link>
                     </li>
@@ -106,7 +106,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               )}
             </>
           )}
-          <p className="mt-8 text-xs text-text-muted">Counts: <span className="text-pos">+ approved commendations</span> and <span className="text-neg">− published reports</span>. Published reports are moderated community allegations, not proven misconduct.</p>
+          <p className="mt-8 text-xs text-text-muted">Icons show community votes (up/down), commendations, and published reports. Published reports are moderated community allegations, not proven misconduct. Votes from accounts under three days old don&apos;t count yet.</p>
         </div>
       </div>
     </div>
