@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "./Logo";
+import { MotionToggle } from "./WaveCanvas";
 
 export function Footer() {
   return (
@@ -30,7 +31,10 @@ export function Footer() {
           </ul>
         </div>
       </div>
-      <div className="border-t border-white/[0.05] py-5 text-center text-xs text-text-muted/70">© {new Date().getFullYear()} ServerSentry. Not affiliated with any game publisher or platform.</div>
+      <div className="flex flex-col items-center justify-center gap-3 border-t border-white/[0.05] py-5 text-center text-xs text-text-muted/70 sm:flex-row sm:gap-6">
+        <span>© {new Date().getFullYear()} ServerSentry. Not affiliated with any game publisher or platform.</span>
+        <MotionToggle />
+      </div>
     </footer>
   );
 }

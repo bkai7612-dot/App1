@@ -145,7 +145,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 55%, var(--bg) 98%);
+  background: linear-gradient(180deg, transparent 60%, var(--bg) 99%);
 }
 
 .grid-fade {
@@ -185,5 +185,5 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
-  .wave-field .blob, .wave-field svg { animation: none !important; }
+  /* Canvas waves read the OS setting themselves and can be re-enabled with the footer toggle. */
 }
